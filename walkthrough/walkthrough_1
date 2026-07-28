@@ -1,0 +1,157 @@
+# Sprint 0 — Architecture Validation & Repository Initialization
+
+## Validation Report
+
+### 1. Architecture Validation ✅
+
+The architecture defined in `ARCHITECTURE.md` is **internally consistent** and follows production-grade microservice principles:
+
+- Clean Architecture ✅
+- Domain-Driven separation (1 service = 1 business domain) ✅
+- Gateway-only public access ✅
+- No cross-service database access ✅
+- REST + JWT communication ✅
+- Prometheus/Actuator observability on every service ✅
+
+### 2. Folder Organization Validation ✅
+
+All folders from **ARCHITECTURE.md Section 3** have been created. Verified structure:
+
+```
+KidneyStoneAI/
+├── backend/
+│   ├── api-gateway/                     ← port 8080
+│   ├── authentication-service/          ← port 8081
+│   ├── patient-service/                 ← port 8082
+│   ├── image-service/                   ← port 8083  (+ uploads/ volume)
+│   ├── diagnosis-service/               ← port 8084
+│   ├── severity-service/                ← port 8085
+│   ├── treatment-service/               ← port 8086
+│   ├── report-service/                  ← port 8087
+│   ├── monitoring-service/              ← port 8088
+│   └── dependency-analyzer-service/     ← port 8089
+│
+│   Every service contains:
+│   └── src/main/java/com/kidneystone/<domain>/
+│       ├── controller/   service/   repository/   entity/
+│       ├── dto/          mapper/    config/        security/
+│       ├── exception/    util/      validation/    constant/
+│       ├── client/       event/     scheduler/
+│   └── src/main/resources/application.yml
+│   └── src/test/
+│   └── pom.xml  (inherits parent)
+│   └── Dockerfile  (multi-stage, non-root)
+│
+├── frontend/
+│   └── src/
+│       ├── components/{Button,Card,Table,Modal,Navbar,Sidebar,
+│       │              Loader,Alert,Form,ImageViewer,
+│       │              PredictionCard,HeatmapViewer,common,layout}
+│       ├── pages/{Login,Dashboard,Patients,Upload,Prediction,
+│       │        Reports,Monitoring,DependencyGraph,Profile,
+│       │        Settings,Doctor,Admin,Patient}
+│       ├── hooks/    services/   context/   router/
+│       ├── utils/    constants/  types/     styles/  config/
+│       └── assets/
+│   ├── public/
+│   ├── package.json   tsconfig.json   Dockerfile   nginx.conf
+│
+├── ai-engine/
+│   ├── api/        models/{yolo,unet,random_forest,gradcam}
+│   ├── training/   prediction/    preprocessing/   postprocessing/
+│   ├── segmentation/ gradcam/     evaluation/      feature_extraction/
+│   ├── severity/   treatment/     utils/   config/  tests/
+│   ├── weights/    datasets/
+│   ├── requirements.txt   Dockerfile
+│
+├── database/
+│   ├── schema/   migration/   seed/   backup/   erd/
+│   └── schema/
+│       ├── authentication.sql   patient.sql    image.sql
+│       ├── diagnosis.sql        severity.sql   treatment.sql
+│       ├── report.sql           monitoring.sql dependency.sql
+│
+├── docker/
+│   ├── backend/  frontend/  database/
+│   ├── prometheus/prometheus.yml   python/  nginx/
+│
+├── monitoring/prometheus/  grafana/  alerts/
+├── testing/unit/  integration/  api/  performance/  security/
+├── deployment/development/  staging/  production/
+├── datasets/raw/  processed/  train/  validation/  test/
+│           annotations/  clinical_data/  metadata/
+├── logs/backend/  frontend/  python/  docker/
+├── diagrams/    research/    scripts/
+│
+├── .gitignore            ← covers Java, Python, Node, secrets, weights
+├── .env.example          ← safe template; .env is gitignored
+├── docker-compose.yml    ← 11 services + health checks + volumes
+├── pom.xml               ← Maven parent POM (Java 21, SB 3.2.5)
+└── README.md
+```
+
+---
+
+### 3. Inconsistencies Identified
+
+| # | Inconsistency | Decision |
+|---|---|---|
+| 1 | **Typo**: Root folder named `rullebook` — Architecture mandates `rulebook` | **Preserved** — renaming would break all existing documents that reference `rullebook/`. Document the discrepancy in manifest. |
+| 2 | **Manifest says `tests/`** — Architecture Section 3 specifies `testing/` | **Used `testing/`** — Architecture is the single source of truth per hierarchy. |
+| 3 | **Manifest references no `logs/` folder** — Architecture mandates it | **Created `logs/`** with 4 sub-directories. |
+
+---
+
+### 4. Improvements Made Beyond Raw Scaffolding
+
+| Improvement | Rationale |
+|---|---|
+| **Multi-stage Dockerfiles** | Smaller production images; separate build and runtime layers |
+| **Non-root Docker users** | Security hardening per production best practices |
+| **Docker health checks on every container** | Enables `depends_on: condition: service_healthy` |
+| **Maven parent POM** | Single dependency version control for all 10 services |
+| **Path aliases in tsconfig** (`@components/*`, etc.) | Clean imports throughout frontend |
+| **PostgreSQL schemas** (not just tables) | Schema-per-domain isolation; future database-per-service migration is non-breaking |
+| **Grafana + volume** added to docker-compose | Monitoring stack is complete from day one |
+| **`.gitkeep` placeholders** | All directories are tracked by Git including empty ones |
+
+---
+
+### 5. Generated Files Summary
+
+| Category | Count |
+|---|---|
+| Root config files | 5 (`.gitignore`, `.env.example`, `docker-compose.yml`, `pom.xml`, `README.md`) |
+| Backend `pom.xml` files | 10 (1 per service) |
+| Backend `application.yml` files | 10 |
+| Backend `Dockerfile` files | 10 |
+| Database schema SQL files | 9 |
+| Python AI Engine files | 2 (`requirements.txt`, `Dockerfile`) |
+| Frontend config files | 4 (`package.json`, `tsconfig.json`, `Dockerfile`, `nginx.conf`) |
+| Infrastructure configs | 1 (`prometheus.yml`) |
+| **Total new files** | **~51** |
+| **Total new folders** | **~180+** |
+
+---
+
+### 6. Verification Status
+
+All 35 critical file paths verified ✅
+
+---
+
+## Next Steps (Sprint 1)
+
+The scaffolding is frozen. Sprint 1 should implement **Authentication Service** in this order per the SYSTEM_CONSTITUTION.md implementation order:
+
+1. Database migration for `auth` schema
+2. JPA Entities: `User`, `Role`, `Permission`, `RefreshToken`
+3. Repositories
+4. DTOs: `LoginRequest`, `RegisterRequest`, `AuthResponse`, `TokenRefreshRequest`
+5. Mappers (MapStruct)
+6. Services: `AuthService`, `JwtService`, `UserService`
+7. Security config: `SecurityConfig`, `JwtAuthFilter`
+8. Controllers: `AuthController`
+9. Global Exception Handler
+10. Unit + Integration tests
+11. Swagger documentation

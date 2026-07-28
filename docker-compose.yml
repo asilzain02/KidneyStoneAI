@@ -1,0 +1,472 @@
+version: "3.9"
+
+# ═══════════════════════════════════════════════════════════════
+# docker-compose.yml — KidneyStoneAI Platform
+# Architecture: Microservices (9 Spring Boot services + Python AI)
+# Every service communicates on the "kidneystone-network" bridge.
+# Gateway is the ONLY public entry point (port 8080).
+# ═══════════════════════════════════════════════════════════════
+
+networks:
+  kidneystone-network:
+    driver: bridge
+    name: kidneystone-network
+
+volumes:
+  postgres-data:
+  image-uploads:
+  prometheus-data:
+  grafana-data:
+
+services:
+
+  # ─── INFRASTRUCTURE ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: kidneystone-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kidneystone}
+      POSTGRES_USER: ${POSTGRES_USER:-kidneystone_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/schema:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - kidneystone-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kidneystone_user} -d ${POSTGRES_DB:-kidneystone}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: kidneystone-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - kidneystone-network
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: kidneystone-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+    ports:
+      - "3001:3000"
+    networks:
+      - kidneystone-network
+    depends_on:
+      - prometheus
+      - loki
+
+  redis:
+    image: redis:7-alpine
+    container_name: kidneystone-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - kidneystone-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: kidneystone-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - kidneystone-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: kidneystone-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-admin1234}
+    command: server /data --console-address ":9001"
+    volumes:
+      - image-uploads:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - kidneystone-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  loki:
+    image: grafana/loki:latest
+    container_name: kidneystone-loki
+    restart: unless-stopped
+    volumes:
+      - ./docker/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - kidneystone-network
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: kidneystone-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./docker/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    networks:
+      - kidneystone-network
+    depends_on:
+      - loki
+
+  # ─── BACKEND MICROSERVICES ────────────────────────────────────
+
+  authentication-service:
+    build:
+      context: ./backend/authentication-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-auth
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+    ports:
+      - "8081:8081"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  patient-service:
+    build:
+      context: ./backend/patient-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-patient
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://authentication-service:8081
+    ports:
+      - "8082:8082"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  image-service:
+    build:
+      context: ./backend/image-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-image
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin1234}
+    ports:
+      - "8083:8083"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  diagnosis-service:
+    build:
+      context: ./backend/diagnosis-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-diagnosis
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      AI_ENGINE_URL: http://ai-engine:5000
+      IMAGE_SERVICE_URL: http://image-service:8083
+    ports:
+      - "8084:8084"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  severity-service:
+    build:
+      context: ./backend/severity-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-severity
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      AI_ENGINE_URL: http://ai-engine:5000
+    ports:
+      - "8085:8085"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  treatment-service:
+    build:
+      context: ./backend/treatment-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-treatment
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8086:8086"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  report-service:
+    build:
+      context: ./backend/report-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-report
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8087:8087"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  monitoring-service:
+    build:
+      context: ./backend/monitoring-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-monitoring
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      PROMETHEUS_URL: http://prometheus:9090
+    ports:
+      - "8088:8088"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  dependency-analyzer-service:
+    build:
+      context: ./backend/dependency-analyzer-service
+      dockerfile: Dockerfile
+    container_name: kidneystone-dependency
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kidneystone}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kidneystone_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8089:8089"
+    networks:
+      - kidneystone-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: kidneystone-gateway
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://authentication-service:8081
+      PATIENT_SERVICE_URL: http://patient-service:8082
+      IMAGE_SERVICE_URL: http://image-service:8083
+      DIAGNOSIS_SERVICE_URL: http://diagnosis-service:8084
+      SEVERITY_SERVICE_URL: http://severity-service:8085
+      TREATMENT_SERVICE_URL: http://treatment-service:8086
+      REPORT_SERVICE_URL: http://report-service:8087
+      MONITORING_SERVICE_URL: http://monitoring-service:8088
+      DEPENDENCY_SERVICE_URL: http://dependency-analyzer-service:8089
+    ports:
+      - "8080:8080"
+    networks:
+      - kidneystone-network
+    depends_on:
+      - authentication-service
+      - patient-service
+      - image-service
+      - diagnosis-service
+      - severity-service
+      - treatment-service
+      - report-service
+      - monitoring-service
+      - dependency-analyzer-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── PYTHON AI ENGINE ─────────────────────────────────────────
+  ai-engine:
+    build:
+      context: ./ai-engine
+      dockerfile: Dockerfile
+    container_name: kidneystone-ai-engine
+    restart: unless-stopped
+    environment:
+      ENV: ${ENV:-production}
+      MODEL_WEIGHTS_DIR: /app/weights
+      AI_ENGINE_SECRET: ${AI_ENGINE_SECRET}
+    volumes:
+      - ./ai-engine/weights:/app/weights:ro
+    ports:
+      - "5000:5000"
+    networks:
+      - kidneystone-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── REACT FRONTEND ───────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kidneystone-frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-http://localhost:8080}
+    ports:
+      - "3000:80"
+    networks:
+      - kidneystone-network
+    depends_on:
+      - api-gateway

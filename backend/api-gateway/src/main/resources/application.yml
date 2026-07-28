@@ -1,0 +1,78 @@
+﻿# application.yml — API Gateway
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/auth/**
+        - id: patient-service
+          uri: ${PATIENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/patients/**
+        - id: image-service
+          uri: ${IMAGE_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/images/**
+        - id: diagnosis-service
+          uri: ${DIAGNOSIS_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/diagnosis/**
+        - id: severity-service
+          uri: ${SEVERITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/severity/**
+        - id: treatment-service
+          uri: ${TREATMENT_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/treatment/**
+        - id: report-service
+          uri: ${REPORT_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/reports/**
+        - id: monitoring-service
+          uri: ${MONITORING_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/v1/monitor/**
+        - id: dependency-service
+          uri: ${DEPENDENCY_SERVICE_URL:http://localhost:8089}
+          predicates:
+            - Path=/api/v1/dependency/**
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+
+logging:
+  level:
+    com.kidneystone.gateway: INFO
+    org.springframework.cloud.gateway: WARN

@@ -1,0 +1,2 @@
+﻿D:\Final Sem Project\KidneyStoneAI\backend\authentication-service\target\surefire-reports\TEST-com.kidneystone.auth.controller.AuthControllerIntegrationTest.xml
+D:\Final Sem Project\KidneyStoneAI\backend\authentication-service\target\surefire-reports\TEST-com.kidneystone.auth.service.AuthServiceTest.xml

@@ -1,0 +1,130 @@
+# ═══════════════════════════════════════════════════════════════
+# .gitignore — KidneyStoneAI Project
+# Covers: Java/Maven, Python, Node/React, Docker, Secrets, OS
+# ═══════════════════════════════════════════════════════════════
+
+# ─── SECRETS / ENVIRONMENT ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+
+# ─── JAVA / MAVEN ───────────────────────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.classpath
+.project
+.settings/
+.factorypath
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# ─── SPRING BOOT ────────────────────────────────────────────────
+spring-boot-devtools.properties
+application-prod.yml
+application-staging.yml
+
+# ─── PYTHON ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+*.spec
+
+# ─── AI MODEL WEIGHTS (large binary files) ──────────────────────
+ai-engine/weights/*.pt
+ai-engine/weights/*.pth
+ai-engine/weights/*.pkl
+ai-engine/weights/*.onnx
+ai-engine/weights/*.h5
+# Use Git LFS or external storage for weights
+
+# ─── DATASETS (large data) ──────────────────────────────────────
+datasets/raw/
+datasets/processed/
+datasets/train/
+datasets/validation/
+datasets/test/
+# Keep only metadata and README
+!datasets/metadata/
+!datasets/README.md
+!datasets/clinical_data/.gitkeep
+
+# ─── NODE / REACT ───────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+.next/
+.cache/
+*.log
+.DS_Store
+.eslintcache
+coverage/
+
+# ─── DOCKER ─────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── UPLOADS (runtime image storage) ────────────────────────────
+backend/image-service/uploads/
+!backend/image-service/uploads/.gitkeep
+
+# ─── LOGS ───────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ─── COMPILED / GENERATED ───────────────────────────────────────
+*.class
+*.swp
+*.swo
+*~
+.classpath
+
+# ─── OPERATING SYSTEM ───────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─── BACKUP ─────────────────────────────────────────────────────
+database/backup/
+*.bak
+*.dump
+
+# ─── TEST COVERAGE ──────────────────────────────────────────────
+testing/reports/

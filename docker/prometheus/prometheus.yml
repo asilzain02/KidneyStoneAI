@@ -1,0 +1,67 @@
+# ═══════════════════════════════════════════════════════════════
+# prometheus.yml — KidneyStoneAI Platform
+# Scrapes Spring Boot Actuator /actuator/prometheus on every service.
+# ═══════════════════════════════════════════════════════════════
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: 'kidneystone-ai'
+    environment: 'production'
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'authentication-service'
+    static_configs:
+      - targets: ['authentication-service:8081']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'patient-service'
+    static_configs:
+      - targets: ['patient-service:8082']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'image-service'
+    static_configs:
+      - targets: ['image-service:8083']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'diagnosis-service'
+    static_configs:
+      - targets: ['diagnosis-service:8084']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'severity-service'
+    static_configs:
+      - targets: ['severity-service:8085']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'treatment-service'
+    static_configs:
+      - targets: ['treatment-service:8086']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'report-service'
+    static_configs:
+      - targets: ['report-service:8087']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'monitoring-service'
+    static_configs:
+      - targets: ['monitoring-service:8088']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'dependency-analyzer-service'
+    static_configs:
+      - targets: ['dependency-analyzer-service:8089']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'ai-engine'
+    static_configs:
+      - targets: ['ai-engine:5000']
+    metrics_path: '/metrics'

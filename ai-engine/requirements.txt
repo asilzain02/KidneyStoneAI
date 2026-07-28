@@ -1,0 +1,50 @@
+# ═══════════════════════════════════════════════════════════════
+# requirements.txt — KidneyStoneAI Python AI Engine
+# Python 3.11 — Production dependencies only.
+# Dev dependencies go in requirements-dev.txt.
+# ═══════════════════════════════════════════════════════════════
+
+# ─── Web Framework (async REST API) ─────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+
+# ─── Deep Learning ───────────────────────────────────────────────
+torch==2.3.0
+torchvision==0.18.0
+ultralytics==8.2.27
+
+# ─── Computer Vision ─────────────────────────────────────────────
+opencv-python-headless==4.9.0.80
+Pillow==10.3.0
+
+# ─── Scientific Computing ────────────────────────────────────────
+numpy==1.26.4
+scipy==1.13.0
+
+# ─── Machine Learning ────────────────────────────────────────────
+scikit-learn==1.5.0
+pandas==2.2.2
+joblib==1.4.2
+
+# ─── Explainability (GradCAM) ────────────────────────────────────
+grad-cam==1.5.2
+
+# ─── Graph Analysis (Dependency Analyzer) ────────────────────────
+networkx==3.3
+
+# ─── Data Validation ─────────────────────────────────────────────
+pydantic==2.7.1
+pydantic-settings==2.3.0
+
+# ─── Logging ─────────────────────────────────────────────────────
+structlog==24.2.0
+
+# ─── Monitoring ──────────────────────────────────────────────────
+prometheus-client==0.20.0
+
+# ─── HTTP Client (inter-service) ─────────────────────────────────
+httpx==0.27.0
+
+# ─── Utilities ───────────────────────────────────────────────────
+python-dotenv==1.0.1
