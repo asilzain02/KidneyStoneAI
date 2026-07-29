@@ -201,4 +201,196 @@ Branch strategy:
 
 ## Status
 
-> **Sprint 0 — Project Scaffolding Complete. Architecture and folder structure initialized. No business logic implemented yet.**
+> **Sprint 3 — Image Service Complete. Sprint 0 (Architecture), Sprint 1 (Authentication), Sprint 2 (Patient Management), and Sprint 3 (Image Management) are all done.**
+
+---
+
+## ✅ Completed Sprints
+
+| Sprint | Scope | Status |
+|---|---|---|
+| Sprint 0 | Project Architecture & Scaffolding | ✅ Complete |
+| Sprint 1 | Authentication Service (JWT, register, login, refresh) | ✅ Complete |
+| Sprint 2 | Patient Management Service (CRUD, search, audit) | ✅ Complete |
+| Sprint 3 | Image Service (upload, storage, metadata, download, delete) | ✅ Complete |
+
+---
+
+## Sprint 3 — Image Service
+
+### Overview
+
+The Image Service handles all medical image lifecycle management:
+
+- Accepts **PNG, JPG, JPEG, DICOM (.dcm)** uploads (max **50 MB**)
+- Rejects every other file type with a meaningful 400 error
+- Stores binary files **on local disk** under `uploads/{patientId}/{uuid}_{originalName}`
+- Persists **metadata only** in PostgreSQL (`image.medical_images` table)
+- Supports future migration to MinIO / AWS S3 via the `FileStorageService` interface
+- All endpoints protected with **JWT Bearer Token**
+
+### API Endpoints
+
+| Method | Path | Authority | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/images/upload/{patientId}` | ROLE_ADMIN, ROLE_DOCTOR | Upload image file |
+| `GET` | `/api/v1/images/{id}` | authenticated | Get image metadata by ID |
+| `GET` | `/api/v1/images/patient/{patientId}` | authenticated | List all images for a patient |
+| `GET` | `/api/v1/images/download/{id}` | authenticated | Download binary file |
+| `DELETE` | `/api/v1/images/{id}` | ROLE_ADMIN, ROLE_DOCTOR | Soft-delete image |
+
+### Swagger UI
+
+```
+http://localhost:8083/swagger-ui.html
+```
+
+### Supported File Types
+
+| Extension | Content-Type | Modality |
+|---|---|---|
+| `.png` | image/png | IMAGE |
+| `.jpg` | image/jpeg | IMAGE |
+| `.jpeg` | image/jpeg | IMAGE |
+| `.dcm` | application/dicom | DICOM |
+
+### Upload Directory Structure
+
+```
+uploads/
+└── {patient-uuid}/
+    ├── {uuid}_scan.png
+    ├── {uuid}_scan.jpg
+    └── {uuid}_scan.dcm
+```
+
+The upload root defaults to `uploads/` relative to the working directory.
+Override via: `UPLOAD_DIR=/path/to/uploads` environment variable.
+
+### Image Service Folder Structure
+
+```
+image-service/src/main/java/com/kidneystone/image/
+├── ImageServiceApplication.java
+├── config/
+│   └── ImageServiceConfig.java       ← OpenAPI + JPA Auditing
+├── controller/
+│   └── ImageController.java
+├── dto/
+│   ├── ImageUploadRequest.java
+│   └── ImageResponse.java
+├── entity/
+│   └── MedicalImage.java
+├── exception/
+│   └── ImageExceptionHandler.java
+├── mapper/
+│   └── ImageMapper.java
+├── repository/
+│   └── MedicalImageRepository.java
+├── security/
+│   ├── JwtAuthenticationEntryPoint.java
+│   ├── JwtAuthenticationFilter.java
+│   ├── JwtProvider.java
+│   └── SecurityConfig.java
+├── service/
+│   └── ImageService.java
+├── storage/
+│   ├── FileStorageService.java       ← interface (swappable)
+│   └── LocalFileStorageService.java  ← local disk implementation
+└── validation/
+    └── ImageFileValidator.java
+```
+
+### Build Instructions
+
+```bash
+# From project root — builds all services including image-service
+mvn clean install
+
+# Build image-service only
+cd backend/image-service
+mvn clean install
+
+# Skip tests
+mvn clean install -DskipTests
+```
+
+### Manual Testing Instructions
+
+Obtain a JWT token first:
+
+```bash
+# 1. Register / Login (auth-service on port 8081)
+curl -X POST http://localhost:8081/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"doctor@example.com","password":"Password123!"}'
+
+# Copy the accessToken from the response
+TOKEN=<paste_token_here>
+PATIENT_ID=<existing-patient-uuid>
+```
+
+Then run each scenario:
+
+```bash
+# Upload PNG
+curl -X POST http://localhost:8083/api/v1/images/upload/$PATIENT_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@scan.png"
+
+# Upload JPG
+curl -X POST http://localhost:8083/api/v1/images/upload/$PATIENT_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@scan.jpg"
+
+# Upload DICOM
+curl -X POST http://localhost:8083/api/v1/images/upload/$PATIENT_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@scan.dcm"
+
+# Reject PDF (expect 400)
+curl -X POST http://localhost:8083/api/v1/images/upload/$PATIENT_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@report.pdf"
+
+# Reject ZIP (expect 400)
+curl -X POST http://localhost:8083/api/v1/images/upload/$PATIENT_ID \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@archive.zip"
+
+# Download image binary
+curl -X GET http://localhost:8083/api/v1/images/download/$IMAGE_ID \
+  -H "Authorization: Bearer $TOKEN" --output downloaded_scan.png
+
+# Retrieve metadata
+curl -X GET http://localhost:8083/api/v1/images/$IMAGE_ID \
+  -H "Authorization: Bearer $TOKEN"
+
+# List patient images
+curl -X GET http://localhost:8083/api/v1/images/patient/$PATIENT_ID \
+  -H "Authorization: Bearer $TOKEN"
+
+# Delete image
+curl -X DELETE http://localhost:8083/api/v1/images/$IMAGE_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Current Roadmap
+
+| Sprint | Scope | Target |
+|---|---|---|
+| Sprint 4 | Diagnosis Service (AI integration) | Pending |
+| Sprint 5 | Severity Service | Pending |
+| Sprint 6 | Treatment Service | Pending |
+| Sprint 7 | Report Service | Pending |
+| Sprint 8 | Monitoring + Dependency Analyzer | Pending |
+| Sprint 9 | Frontend (React + TypeScript) | Pending |
+| Sprint 10 | AI Engine (YOLO11 + U-Net + Grad-CAM) | Pending |
+
+---
+
+## Known Issues / Backlog
+
+- **JWT Swagger Testing**: Swagger UI bearer token input works but manual curl is recommended during backend-only testing. Will be validated during frontend integration.

@@ -1,19 +1,24 @@
-﻿# application.yml — KidneyStoneAI: image-service
+# application.yml — KidneyStoneAI: image-service
 # All sensitive values must be supplied through environment variables.
 # Never hardcode secrets inside this file.
 
 spring:
   application:
     name: image-service
+  profiles:
+    active: ${ENV:dev}
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/kidneystone}
-    username: ${SPRING_DATASOURCE_USERNAME:kidneystone_user}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:kidneystone}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:admin}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
       connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-init-sql: SET TIME ZONE 'UTC'
   jpa:
     hibernate:
       ddl-auto: validate
@@ -22,9 +27,24 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+        jdbc:
+          batch_size: 20
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    schemas: image
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 55MB
 
 server:
   port: 8083
+
+storage:
+  upload-dir: ${UPLOAD_DIR:uploads}
+  max-file-size-bytes: ${MAX_FILE_SIZE_BYTES:52428800}
 
 management:
   endpoints:
@@ -33,7 +53,7 @@ management:
         include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
   metrics:
     export:
       prometheus:
@@ -41,14 +61,14 @@ management:
 
 springdoc:
   api-docs:
-    path: /api-docs
+    path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
 
 security:
   jwt:
-    secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    secret: ${JWT_SECRET:7c222fb2927d828af22f592134e8932480637c0d79cc5f6d6287951a37c3da33c67537494411fb31061f52d0a4c28f34175b5a6be58ab5b4976451def53a2386}
+    expiration-ms: ${JWT_EXPIRATION_MS:900000}
 
 logging:
   level:
@@ -75,9 +95,10 @@ spring:
       on-profile: dev
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     show-sql: true
   datasource:
     url: jdbc:postgresql://localhost:5432/kidneystone
-    username: kidneystone_user
-    password: dev_password_change_me
+    username: postgres
+    password: admin
+

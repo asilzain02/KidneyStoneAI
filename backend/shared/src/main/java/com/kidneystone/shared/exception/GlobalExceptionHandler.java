@@ -7,6 +7,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+//import org.springframework.security.access.AccessDeniedException;
 
 import java.util.stream.Collectors;
 
@@ -25,10 +26,24 @@ public class GlobalExceptionHandler {
         String details = ex.getBindingResult().getAllErrors().stream()
                 .map(error -> ((FieldError) error).getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining(", "));
-        
+
         ApiResponse<Void> response = ApiResponse.error("Validation Failed", "VALIDATION_ERROR", details);
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
+
+    // @ExceptionHandler(AccessDeniedException.class)
+    // public ResponseEntity<ApiResponse<Void>>
+    // handleAccessDenied(AccessDeniedException ex) {
+
+    // ApiResponse<Void> response = ApiResponse.error(
+    // "Access Denied",
+    // "FORBIDDEN",
+    // ex.getMessage());
+
+    // return ResponseEntity
+    // .status(HttpStatus.FORBIDDEN)
+    // .body(response);
+    // }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {

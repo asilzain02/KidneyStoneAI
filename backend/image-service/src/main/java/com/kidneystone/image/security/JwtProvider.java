@@ -1,4 +1,4 @@
-package com.kidneystone.patient.security;
+package com.kidneystone.image.security;
 
 import com.kidneystone.shared.security.BaseJwtProvider;
 import io.jsonwebtoken.io.Decoders;

@@ -2,7 +2,7 @@
 
 # AI Project Memory & Progress Tracker
 
-Version: 1.0.0
+Version: v0.3
 
 Project Name:
 AI-Powered Reliable Clinical Decision Support Platform for Kidney Stone Diagnosis Using Explainable AI and Intelligent Microservice Dependency Analysis
@@ -29,23 +29,23 @@ Only modify modules affected by the requested feature.
 
 Project State
 
-Sprint 0 Scaffolding Complete
+Sprint 3 Complete
 
 Completion
 
-5%
+~42%
 
 Current Milestone
 
-Repository Initialization
+Image Service Implementation
 
 Current Sprint
 
-Sprint 1 — COMPLETE
+Sprint 3 — COMPLETE
 
 Next Sprint
 
-Sprint 2 — Patient Service Implementation
+Sprint 4 — Diagnosis Service Implementation
 
 Project Health
 
@@ -53,7 +53,7 @@ Healthy
 
 Last Updated
 
-2026-07-28
+2026-07-29
 
 ---
 
@@ -177,69 +177,63 @@ GitHub
 
 Authentication Service
 
-Status
-
-Complete
+Status: Complete — JWT auth, BCrypt, register/login/refresh, Swagger
 
 Patient Service
 
-Pending
+Status: Complete — CRUD, search, audit, soft-delete, Swagger, tests
 
 Image Service
 
-Pending
+Status: Complete — upload PNG/JPG/JPEG/DICOM, local storage, metadata DB, download, soft-delete, JWT, Swagger, tests
 
 Diagnosis Service
 
-Pending
-
-Segmentation Service
-
-Pending
+Status: Pending
 
 Severity Service
 
-Pending
+Status: Pending
 
 Treatment Service
 
-Pending
+Status: Pending
 
 Report Service
 
-Pending
+Status: Pending
 
 Monitoring Service
 
-Pending
+Status: Pending
 
 Dependency Analyzer
 
-Pending
+Status: Pending
 
 Frontend
 
-Pending
+Status: Pending
 
 Database
 
-Pending
+Status: auth schema ✓, patient schema ✓, image schema ✓
 
 Docker
 
-Pending
+Status: Pending
 
 Testing
 
-Pending
+Status: Unit + Integration tests for auth, patient, and image services ✓
 
 Deployment
 
-Pending
+Status: Pending
 
 Documentation
 
-Planning
+Status: README updated, Manifest updated
 
 ---
 
@@ -285,7 +279,7 @@ All .gitkeep placeholder files added
 
 # IN PROGRESS
 
-Sprint 2 — Patient Service Implementation
+Sprint 4 — Diagnosis Service Implementation (Next)
 
 ---
 
@@ -421,19 +415,19 @@ Indexes Created
 
 Endpoints Designed
 
-0
+~20 (auth + patient + image)
 
 Endpoints Implemented
 
-0
+~20
 
 Endpoints Tested
 
-0
+~20 (unit + integration)
 
 Swagger
 
-Not Started
+Complete for Auth (8081), Patient (8082), Image (8083)
 
 ---
 
@@ -537,27 +531,27 @@ Pending
 
 JWT
 
-Pending
+Complete — all 3 services
 
 BCrypt
 
-Pending
+Complete — Auth Service
 
 Role Based Access
 
-Pending
+Complete — ROLE_ADMIN, ROLE_DOCTOR on all endpoints
 
 HTTPS Ready
 
-Pending
+Pending (will configure at Docker/reverse-proxy layer)
 
 Input Validation
 
-Pending
+Complete — @Valid, ImageFileValidator, extension + content-type + size checks
 
 Exception Handling
 
-Pending
+Complete — GlobalExceptionHandler (shared), ImageExceptionHandler
 
 ---
 
@@ -623,11 +617,25 @@ Pending
 
 # CHANGELOG
 
-Version
-
-1.2.0 — 2026-07-28
+v0.3 — 2026-07-29
 
 Changes
+
+Sprint 3 Complete
+
+Implemented Image Service: MedicalImage entity (BaseEntity), Flyway migration (image schema), FileStorageService interface + LocalFileStorageService implementation, ImageFileValidator (extension/content-type/size), ImageService, ImageController (5 endpoints), ImageMapper (MapStruct), ImageExceptionHandler, JWT security (JwtProvider, JwtAuthenticationFilter, SecurityConfig), ImageServiceConfig (OpenAPI + JPA Auditing), unit tests (ImageServiceTest, ImageFileValidatorTest), integration tests (ImageControllerIntegrationTest). README.md extended. PROJECT_MANIFEST.md updated.
+
+JWT Architecture Redesign (Hotfix)
+
+Redesigned JWT structure to serialize authorities as a List of Strings under the "authorities" claim (replacing "role" claim). BaseJwtProvider extracted to the shared library for Future-Proofing (consumed by auth, patient, and image services). JwtAuthenticationFilter regex extraction removed in favor of Stream mapping into SimpleGrantedAuthority, resolving the 403 Forbidden flaw. H2 TestPropertySource configs hardened across patient and auth integration tests to allow perfect decoupled pipeline executions without Docker daemon dependence.
+
+v0.2 — 2026-07-28
+
+Sprint 2 Complete
+
+Implemented Patient Service (CRUD, search, audit, soft-delete, Swagger, tests).
+
+v0.1 — 2026-07-28
 
 Sprint 1 Complete
 
@@ -637,53 +645,21 @@ Sprint 0.1 Complete
 
 Renamed 'rullebook' folder to 'rulebook' and corrected all documentation references.
 
-Fixed AI Stack documentation to correctly reference 'Ultralytics YOLO11'.
-
-Updated Severity Module documentation to use 'Ensemble Severity Prediction'.
-
-Added Redis, RabbitMQ, MinIO, Loki, and Promtail to docker-compose.yml and .env.example.
-
 Created backend/shared library for Common DTOs, Exceptions, Utilities, Constants, and Configuration.
-
-Added OpenAPI Code Generator configuration to parent pom.xml.
-
-Added basic GitHub Actions CI pipeline (.github/workflows/build.yml).
-
-Upgraded PostgreSQL image from version 15 to 16 in docker-compose.yml.
 
 Sprint 0 Complete
 
-Complete folder structure scaffolded per ARCHITECTURE.md Section 3
-
-All 10 backend microservice Maven projects initialized
-
-All service application.yml configs generated
-
-All service Dockerfiles generated (multi-stage, non-root)
-
-Python AI Engine requirements.txt + Dockerfile generated
-
-React frontend package.json + tsconfig.json + Dockerfile generated
-
-All 9 PostgreSQL schema SQL files generated per DATABASE.md
-
-docker-compose.yml generated with full service mesh + health checks
-
-Prometheus scrape config generated for all services
-
-README.md generated
-
-Inconsistency noted: root folder is named 'rullebook' (typo), Architecture.md specifies 'rulebook'. Preserved to avoid breaking existing references.
+Complete folder structure scaffolded. All 10 backend microservice Maven projects initialized. All service configs, Dockerfiles, DB schemas, docker-compose.yml, Prometheus config, and README generated.
 
 ---
 
 # CURRENT TASK
 
-Sprint 1 Complete — Begin Sprint 2
+Sprint 3 Complete — Begin Sprint 4
 
 Next Task
 
-Implement Patient Service (entities, repository, service, controller)
+Implement Diagnosis Service (AI integration — calls Python AI Engine)
 
 ---
 
@@ -691,23 +667,23 @@ Implement Patient Service (entities, repository, service, controller)
 
 1
 
-Implement Authentication Service — Sprint 1
+Implement Diagnosis Service — Sprint 4 (OpenFeign call to Python AI Engine)
 
 2
 
-Implement Patient Service — Sprint 2
+Implement Severity Service — Sprint 5
 
 3
 
-Implement Image Service — Sprint 3
+Implement Treatment Service — Sprint 6
 
 4
 
-Implement Diagnosis Service + AI Engine Integration — Sprint 4
+Implement Report Service — Sprint 7
 
 5
 
-Implement Frontend Login + Dashboard — Sprint 5
+Implement Frontend Login + Dashboard — Sprint 9
 
 ---
 

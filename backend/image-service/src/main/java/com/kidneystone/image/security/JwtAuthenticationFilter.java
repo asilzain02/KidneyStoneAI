@@ -1,4 +1,4 @@
-package com.kidneystone.patient.security;
+package com.kidneystone.image.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -27,14 +27,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
         return path.startsWith("/v3/api-docs") ||
-               path.startsWith("/swagger-ui") ||
-               path.startsWith("/actuator/health") ||
-               path.equals("/error");
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/actuator/health") ||
+                path.equals("/error");
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
         try {
             String jwt = parseJwt(request);
             if (jwt != null && jwtProvider.validateToken(jwt)) {
@@ -42,16 +43,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 java.util.UUID userId = jwtProvider.getUserId(jwt);
                 List<String> roleStrings = jwtProvider.getAuthorities(jwt);
 
-                // Use userId as principal name so controllers can call principal.getName() -> UUID
+                // DEBUG LOGS
+                log.info("======================================");
+                log.info("JWT Subject      : {}", subject);
+                log.info("JWT UserId       : {}", userId);
+                log.info("JWT Authorities  : {}", roleStrings);
+                log.info("======================================");
+
                 String principalName = (userId != null) ? userId.toString() : subject;
 
                 List<SimpleGrantedAuthority> authorities = roleStrings.stream()
                         .map(SimpleGrantedAuthority::new)
                         .toList();
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(principalName, null, authorities);
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        principalName, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                // DEBUG LOGS
+                log.info("Spring Authentication: {}",
+                        SecurityContextHolder.getContext().getAuthentication());
+
+                log.info("Spring Authorities: {}",
+                        SecurityContextHolder.getContext()
+                                .getAuthentication()
+                                .getAuthorities());
+
+                log.info("======================================");
             }
         } catch (Exception e) {
             log.error("Cannot set user authentication: {}", e.getMessage());
