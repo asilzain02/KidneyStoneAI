@@ -1,0 +1,36 @@
+# ════════════════════════════════════════════════════════
+# KidneyStoneAI — Path Configuration
+# All paths can be overridden via environment variables.
+# ════════════════════════════════════════════════════════
+
+# Root directories — override via env vars
+
+# ── Raw dataset paths ────────────────────────────────────
+raw:
+  classification: "${KIDNEY_AI_DATA_ROOT:./datasets}/raw/classification/ct-kidney"
+  segmentation_images: "${KIDNEY_AI_DATA_ROOT:./datasets}/raw/segmentation/kssd2025/data/image"
+  segmentation_labels: "${KIDNEY_AI_DATA_ROOT:./datasets}/raw/segmentation/kssd2025/data/label"
+
+# ── Manifests ────────────────────────────────────────────
+manifests:
+  classification: "${KIDNEY_AI_DATA_ROOT:./datasets}/manifests/classification_manifest.csv"
+  segmentation: "${KIDNEY_AI_DATA_ROOT:./datasets}/manifests/segmentation_manifest.csv"
+
+# ── Splits ───────────────────────────────────────────────
+splits:
+  classification_dir: "${KIDNEY_AI_DATA_ROOT:./datasets}/splits/classification"
+  segmentation_dir: "${KIDNEY_AI_DATA_ROOT:./datasets}/splits/segmentation"
+
+# ── Weights ──────────────────────────────────────────────
+weights:
+  classification_best: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/classification/final_candidate_exp02a.pth"
+  classification_latest: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/classification/latest_checkpoint.pth"
+  segmentation_best: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/segmentation/FINAL_SEGMENTATION_MODEL.pth"
+  segmentation_latest: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/segmentation/latest_checkpoint.pth"
+
+# ── Outputs ──────────────────────────────────────────────
+outputs:
+  gradcam: "${KIDNEY_AI_OUTPUT_ROOT:./ai-engine/outputs}/gradcam"
+  evaluation: "${KIDNEY_AI_OUTPUT_ROOT:./ai-engine/outputs}/evaluation"
+  predictions: "${KIDNEY_AI_OUTPUT_ROOT:./ai-engine/outputs}/predictions"
+  logs: "${KIDNEY_AI_OUTPUT_ROOT:./ai-engine/outputs}/logs"

@@ -1,83 +1,41 @@
-﻿# application.yml — KidneyStoneAI: diagnosis-service
-# All sensitive values must be supplied through environment variables.
-# Never hardcode secrets inside this file.
+server:
+  port: 8084
 
 spring:
   application:
     name: diagnosis-service
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/kidneystone}
-    username: ${SPRING_DATASOURCE_USERNAME:kidneystone_user}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:admin}
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: false
+        format_sql: true
 
-server:
-  port: 8084
+# security:
+#   jwt:
+#     secret: ${JWT_SECRET:CHANGE_ME_MIN_64_CHAR_SECRET_KEY_HERE_REPLACE_IN_PRODUCTION}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:7c222fb2927d828af22f592134e8932480637c0d79cc5f6d6287951a37c3da33c67537494411fb31061f52d0a4c28f34175b5a6be58ab5b4976451def53a2386}
+
+ai-engine:
+  base-url: ${AI_ENGINE_URL:http://localhost:8000}
+  secret: ${AI_ENGINE_SECRET:}
+
+image-service:
+  base-url: ${IMAGE_SERVICE_URL:http://localhost:8083}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,metrics,prometheus
   endpoint:
     health:
-      show-details: when-authorized
-  metrics:
-    export:
-      prometheus:
-        enabled: true
-
-springdoc:
-  api-docs:
-    path: /api-docs
-  swagger-ui:
-    path: /swagger-ui.html
-
-security:
-  jwt:
-    secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
-
-logging:
-  level:
-    com.kidneystone: INFO
-    org.springframework.security: WARN
-    org.hibernate.SQL: WARN
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-
----
-spring:
-  config:
-    activate:
-      on-profile: docker
-  datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-
----
-spring:
-  config:
-    activate:
-      on-profile: dev
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    show-sql: true
-  datasource:
-    url: jdbc:postgresql://localhost:5432/kidneystone
-    username: kidneystone_user
-    password: dev_password_change_me
+      show-details: always

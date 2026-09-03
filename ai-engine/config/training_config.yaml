@@ -1,0 +1,85 @@
+# ════════════════════════════════════════════════════════
+# KidneyStoneAI — Training Configuration
+# ════════════════════════════════════════════════════════
+
+# ── Classification ───────────────────────────────────────
+classification:
+  backbone: efficientnet_b0
+  num_classes: 4
+  class_names: [Normal, Cyst, Stone, Tumor]
+  input_size: 224
+  pretrained: true
+  dropout: 0.3
+
+  batch_size: 32  # changed from 32 to 16
+  num_epochs: 10 # for full training use 50
+  learning_rate: 0.001 # changed from 0.001 to 0.0001
+  weight_decay: 0.0001
+  optimizer: adamw
+  scheduler: cosine_annealing
+  scheduler_T_max: 50
+
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+
+  # ── Augmentation strategy ─────────────────────────────
+  # Options: baseline | moderate | strong
+  augmentation:
+    strategy: baseline
+
+  # ── Class weighting ───────────────────────────────────
+  # Weights computed from TRAINING SPLIT only
+  # Options: none | balanced
+  class_weighting:
+    enabled: false
+    strategy: balanced
+
+  # ── Transfer learning ─────────────────────────────────
+  # Options: standard | staged
+  # staged: freeze backbone → train head → unfreeze → fine-tune
+  transfer_learning:
+    strategy: standard
+    head_lr: 0.001
+    backbone_lr: 0.00001
+    head_epochs: 10        # epochs with frozen backbone (staged only)
+
+  # smoke-test override
+  smoke_epochs: 2
+  smoke_samples_per_class: 50
+
+# ── Segmentation ─────────────────────────────────────────
+segmentation:
+  input_size: 256            # U-Net works with 256×256
+  in_channels: 1             # grayscale CT
+  out_channels: 1            # binary mask
+  base_features: 32
+
+  loss: dice_bce             # options: dice | bce | dice_bce
+  dice_weight: 0.5
+  bce_weight: 0.5
+
+  batch_size: 8
+  num_epochs: 50
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  optimizer: adam
+  scheduler: reduce_on_plateau
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+
+  smoke_epochs: 2
+  smoke_samples: 50
+
+# ── Splits ───────────────────────────────────────────────
+splits:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  random_seed: 42
+
+# ── Reproducibility ──────────────────────────────────────
+seed: 42
+deterministic: true
