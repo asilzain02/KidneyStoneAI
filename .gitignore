@@ -65,6 +65,7 @@ ai-engine/weights/*.pth
 ai-engine/weights/*.pkl
 ai-engine/weights/*.onnx
 ai-engine/weights/*.h5
+ai-engine/weights/*.ckpt
 # Use Git LFS or external storage for weights
 
 # ─── DATASETS (large data) ──────────────────────────────────────
@@ -73,6 +74,9 @@ datasets/processed/
 datasets/train/
 datasets/validation/
 datasets/test/
+datasets/manifests/
+datasets/splits/
+*.tif
 # Keep only metadata and README
 !datasets/metadata/
 !datasets/README.md
@@ -128,3 +132,40 @@ database/backup/
 
 # ─── TEST COVERAGE ──────────────────────────────────────────────
 testing/reports/
+
+# ─── PYTHON VIRTUAL ENVIRONMENTS (all variants) ─────────────────
+.venv-ai/
+.venv*/
+
+# ─── AI ENGINE — RUNTIME OUTPUTS ───────────────────────────────
+ai-engine/outputs/
+outputs/
+
+# ─── AI MODEL WEIGHTS (subdirectory experiments) ────────────────
+# Covers EXP* experiment weight folders and nested checkpoints
+ai-engine/weights/EXP*/
+ai-engine/weights/experiments/
+ai-engine/weights/**/*.pt
+ai-engine/weights/**/*.pth
+ai-engine/weights/**/*.pkl
+ai-engine/weights/**/*.onnx
+ai-engine/weights/**/*.h5
+ai-engine/weights/**/*.ckpt
+
+# ─── ROOT-LEVEL SCRATCH / TEST OUTPUT FILES ────────────────────
+# These are one-off diagnostic files, not project artifacts
+/pytest_out.txt
+/pytest_out2.txt
+/smoke_run.txt
+/smoke_test_final.txt
+/smoke_test_final_utf8.txt
+/smoke_test_output.txt
+/test_out.txt
+/test_output.txt
+/test_output_utf8.txt
+/verify_output.txt
+/verify_output.utf8.txt
+/exp01_output.txt
+/mvn.log
+/walkthrough_experiments.md
+/implementation_plan_segmentation
