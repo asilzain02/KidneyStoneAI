@@ -9,6 +9,17 @@ import com.kidneystone.diagnosis.entity.Diagnosis;
 import com.kidneystone.diagnosis.exception.AiEngineException;
 import com.kidneystone.diagnosis.mapper.DiagnosisMapper;
 import com.kidneystone.diagnosis.repository.DiagnosisRepository;
+import com.kidneystone.diagnosis.client.ImageServiceClient;
+import com.kidneystone.diagnosis.client.ImageServiceClient.DownloadedImage;
+import com.kidneystone.diagnosis.client.SeverityServiceClient;
+import com.kidneystone.diagnosis.client.TreatmentServiceClient;
+import com.kidneystone.diagnosis.client.ReportServiceClient;
+import com.kidneystone.diagnosis.dto.external.SeverityRequest;
+import com.kidneystone.diagnosis.dto.external.SeverityResponse;
+import com.kidneystone.diagnosis.dto.external.TreatmentRequest;
+import com.kidneystone.diagnosis.dto.external.TreatmentResponse;
+import com.kidneystone.diagnosis.dto.external.ReportRequest;
+import com.kidneystone.diagnosis.dto.external.ReportResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,6 +56,10 @@ public class DiagnosisService {
 
     private final DiagnosisRepository diagnosisRepository;
     private final AiEngineClient aiEngineClient;
+    private final ImageServiceClient imageServiceClient;
+    private final SeverityServiceClient severityServiceClient;
+    private final TreatmentServiceClient treatmentServiceClient;
+    private final ReportServiceClient reportServiceClient;
     private final DiagnosisMapper diagnosisMapper;
     private final ObjectMapper objectMapper;
 
@@ -72,12 +87,19 @@ public class DiagnosisService {
             UUID imageId,
             UUID patientId,
             UUID requestedBy,
-            byte[] imageBytes,
-            String filename,
-            String contentType
+            String authHeader
     ) {
         log.info("Starting AI diagnosis: imageId={}, patientId={}, requestedBy={}",
                 imageId, patientId, requestedBy);
+
+        // ── 0. Fetch image from Image Service ──────────────────────────────
+        DownloadedImage image;
+        try {
+            image = imageServiceClient.downloadImage(imageId, authHeader);
+        } catch (Exception e) {
+            log.error("Failed to retrieve image for diagnosis: {}", e.getMessage());
+            throw new AiEngineException("Failed to retrieve image from Image Service. Ensure the image exists.");
+        }
 
         // ── 1. Create pending diagnosis record ─────────────────────────────
         // Purpose:
@@ -96,7 +118,7 @@ public class DiagnosisService {
         // ── 2. Call AI Engine ──────────────────────────────────────────────
         AiAnalysisResult aiResult;
         try {
-            aiResult = aiEngineClient.analyze(imageBytes, filename, contentType);
+            aiResult = aiEngineClient.analyze(image.getBytes(), image.getFilename(), image.getContentType());
         } catch (AiEngineException e) {
             // Purpose:
             // Mark the diagnosis as FAILED — do not silently swallow the error.
@@ -111,6 +133,36 @@ public class DiagnosisService {
 
         // ── 3. Persist AI result columns ───────────────────────────────────
         diagnosisMapper.applyAiResult(aiResult, diagnosis);
+
+        // ── 4. Assess Severity ─────────────────────────────────────────────
+        try {
+            SeverityRequest sevReq = SeverityRequest.builder()
+                    .predictedClass(diagnosis.getPredictedClass())
+                    .confidence(diagnosis.getConfidence())
+                    .stoneDetected(diagnosis.getStoneDetected())
+                    .stoneAreaPixels(diagnosis.getStoneAreaPixels())
+                    .coverageRatio(diagnosis.getCoverageRatio())
+                    .build();
+            SeverityResponse sevResp = severityServiceClient.assessSeverity(sevReq, authHeader);
+            diagnosis.setSeverityLevel(sevResp.getSeverityLevel());
+            diagnosis.setSeverityReason(sevResp.getSeverityReason());
+        } catch (Exception e) {
+            log.warn("Severity assessment failed. Continuing without severity data: {}", e.getMessage());
+        }
+
+        // ── 5. Recommend Treatment ─────────────────────────────────────────
+        try {
+            TreatmentRequest treatReq = TreatmentRequest.builder()
+                    .predictedClass(diagnosis.getPredictedClass())
+                    .severityLevel(diagnosis.getSeverityLevel())
+                    .build();
+            TreatmentResponse treatResp = treatmentServiceClient.recommendTreatment(treatReq, authHeader);
+            diagnosis.setTreatmentCategory(treatResp.getTreatmentCategory());
+            diagnosis.setTreatmentRecommendation(treatResp.getTreatmentRecommendation());
+        } catch (Exception e) {
+            log.warn("Treatment recommendation failed. Continuing without treatment data: {}", e.getMessage());
+        }
+
         diagnosis.setStatus("COMPLETED");
 
         // Purpose:
@@ -178,6 +230,34 @@ public class DiagnosisService {
                         "Diagnosis not found: " + diagnosisId
                 ));
         return diagnosisMapper.toResponse(diagnosis, aiEngineBaseUrl);
+    }
+
+    /**
+     * Purpose:
+     *   Generate a full clinical report by calling the downstream Report Service.
+     */
+    @Transactional(readOnly = true)
+    public ReportResponse generateReport(UUID diagnosisId, String authHeader) {
+        Diagnosis diagnosis = diagnosisRepository
+                .findById(diagnosisId)
+                .orElseThrow(() -> new IllegalArgumentException("Diagnosis not found: " + diagnosisId));
+
+        ReportRequest req = ReportRequest.builder()
+                .patientId(diagnosis.getPatientId() != null ? diagnosis.getPatientId().toString() : null)
+                .imageId(diagnosis.getImageId() != null ? diagnosis.getImageId().toString() : null)
+                .predictedClass(diagnosis.getPredictedClass())
+                .confidence(diagnosis.getConfidence())
+                .stoneDetected(diagnosis.getStoneDetected())
+                .severityLevel(diagnosis.getSeverityLevel())
+                .severityReason(diagnosis.getSeverityReason())
+                .treatmentCategory(diagnosis.getTreatmentCategory())
+                .treatmentRecommendation(diagnosis.getTreatmentRecommendation())
+                .xaiMethod(diagnosis.getXaiMethod())
+                .status(diagnosis.getStatus())
+                .timestamp(diagnosis.getCreatedAt() != null ? diagnosis.getCreatedAt().toString() : null)
+                .build();
+
+        return reportServiceClient.generateReport(req, authHeader);
     }
 
     // ── Utility ────────────────────────────────────────────────────────────────

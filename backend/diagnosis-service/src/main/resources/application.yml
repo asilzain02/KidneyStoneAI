@@ -31,6 +31,15 @@ ai-engine:
 image-service:
   base-url: ${IMAGE_SERVICE_URL:http://localhost:8083}
 
+severity-service:
+  base-url: ${SEVERITY_SERVICE_URL:http://localhost:8085}
+
+treatment-service:
+  base-url: ${TREATMENT_SERVICE_URL:http://localhost:8086}
+
+report-service:
+  base-url: ${REPORT_SERVICE_URL:http://localhost:8087}
+
 management:
   endpoints:
     web:

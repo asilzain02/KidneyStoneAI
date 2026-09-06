@@ -1,83 +1,19 @@
-﻿# application.yml — KidneyStoneAI: report-service
-# All sensitive values must be supplied through environment variables.
-# Never hardcode secrets inside this file.
+server:
+  port: 8087
 
 spring:
   application:
     name: report-service
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/kidneystone}
-    username: ${SPRING_DATASOURCE_USERNAME:kidneystone_user}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: false
 
-server:
-  port: 8087
+security:
+  jwt:
+    secret: ${JWT_SECRET:7c222fb2927d828af22f592134e8932480637c0d79cc5f6d6287951a37c3da33c67537494411fb31061f52d0a4c28f34175b5a6be58ab5b4976451def53a2386}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,metrics,prometheus
   endpoint:
     health:
-      show-details: when-authorized
-  metrics:
-    export:
-      prometheus:
-        enabled: true
-
-springdoc:
-  api-docs:
-    path: /api-docs
-  swagger-ui:
-    path: /swagger-ui.html
-
-security:
-  jwt:
-    secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
-
-logging:
-  level:
-    com.kidneystone: INFO
-    org.springframework.security: WARN
-    org.hibernate.SQL: WARN
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-
----
-spring:
-  config:
-    activate:
-      on-profile: docker
-  datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-
----
-spring:
-  config:
-    activate:
-      on-profile: dev
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    show-sql: true
-  datasource:
-    url: jdbc:postgresql://localhost:5432/kidneystone
-    username: kidneystone_user
-    password: dev_password_change_me
+      show-details: always

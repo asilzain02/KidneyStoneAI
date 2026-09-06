@@ -1,6 +1,9 @@
 package com.kidneystone.diagnosis.controller;
 
 import com.kidneystone.diagnosis.dto.DiagnosisResponse;
+import com.kidneystone.diagnosis.dto.external.ReportResponse;
+import com.kidneystone.diagnosis.dto.external.SeverityResponse;
+import com.kidneystone.diagnosis.dto.external.TreatmentResponse;
 import com.kidneystone.diagnosis.exception.AiEngineException;
 import com.kidneystone.diagnosis.service.DiagnosisService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,7 +19,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.io.IOException;
 import java.security.Principal;
@@ -67,49 +71,40 @@ public class DiagnosisController {
      * @param patientId  UUID of the patient (query param — supplied by gateway/caller)
      * @param principal  JWT principal — provides the requesting user's UUID
      */
-    @PostMapping(
-            value = "/{imageId}",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
-    @Operation(summary = "Run AI diagnosis on a CT image")
+    /**
+     * POST /api/v1/diagnoses
+     *
+     * Purpose:
+     *   Trigger the full AI pipeline on an already uploaded image.
+     *   Fetches the image automatically from Image Service.
+     *
+     * Authorization: ROLE_ADMIN or ROLE_DOCTOR only.
+     *
+     * @param request    JSON DTO containing patientId and imageId
+     * @param authHeader Bearer token passed intact to Image Service
+     * @param principal  JWT principal — provides the requesting user's UUID
+     */
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Run AI diagnosis on an existing CT image")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")
     public ResponseEntity<?> runDiagnosis(
-            @PathVariable UUID imageId,
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("patientId") UUID patientId,
+            @Valid @RequestBody com.kidneystone.diagnosis.dto.DiagnosisRequest request,
+            @RequestHeader(org.springframework.http.HttpHeaders.AUTHORIZATION) String authHeader,
             Principal principal
     ) {
         UUID requestedBy = UUID.fromString(principal.getName());
+        UUID imageId = request.getImageId();
+        UUID patientId = request.getPatientId();
 
-        log.info("Diagnosis request: imageId={}, patientId={}, requestedBy={}, file={}",
-                imageId, patientId, requestedBy, file.getOriginalFilename());
+        log.info("Diagnosis request: imageId={}, patientId={}, requestedBy={}",
+                imageId, patientId, requestedBy);
 
-        // ── Validate upload ────────────────────────────────────────────────
-        if (file.isEmpty()) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(errorBody("File is empty."));
-        }
-
-        byte[] imageBytes;
-        try {
-            imageBytes = file.getBytes();
-        } catch (IOException e) {
-            log.error("Failed to read uploaded file: {}", e.getMessage());
-            return ResponseEntity
-                    .badRequest()
-                    .body(errorBody("Failed to read uploaded file: " + e.getMessage()));
-        }
-
-        // ── Run diagnosis ──────────────────────────────────────────────────
         try {
             DiagnosisResponse response = diagnosisService.runDiagnosis(
                     imageId,
                     patientId,
                     requestedBy,
-                    imageBytes,
-                    file.getOriginalFilename(),
-                    file.getContentType()
+                    authHeader
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
@@ -176,6 +171,37 @@ public class DiagnosisController {
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
+
+    @GetMapping("/{id}/severity")
+    @Operation(summary = "Get the computed severity assessment for a diagnosis")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")
+    public ResponseEntity<SeverityResponse> getSeverity(@PathVariable UUID id) {
+        DiagnosisResponse diagnosis = diagnosisService.getDiagnosisById(id);
+        SeverityResponse response = new SeverityResponse();
+        response.setSeverityLevel(diagnosis.getSeverityLevel());
+        response.setSeverityReason(diagnosis.getSeverityReason());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/treatment")
+    @Operation(summary = "Get the computed treatment recommendation for a diagnosis")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")
+    public ResponseEntity<TreatmentResponse> getTreatment(@PathVariable UUID id) {
+        DiagnosisResponse diagnosis = diagnosisService.getDiagnosisById(id);
+        TreatmentResponse response = new TreatmentResponse();
+        response.setTreatmentCategory(diagnosis.getTreatmentCategory());
+        response.setTreatmentRecommendation(diagnosis.getTreatmentRecommendation());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/report")
+    @Operation(summary = "Generate a structured clinical report for a diagnosis")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")
+    public ResponseEntity<ReportResponse> getReport(
+            @PathVariable UUID id,
+            @RequestHeader(value = org.springframework.http.HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
+        return ResponseEntity.ok(diagnosisService.generateReport(id, authHeader));
+    }
 
     /**
      * Purpose:

@@ -68,6 +68,14 @@ public class DiagnosisResponse {
     private Integer processingTimeMs;
     private String device;
 
+    // ── Clinical Decision Support ─────────────────────────────────────────────
+
+    private String severityLevel;
+    private String severityReason;
+    
+    private String treatmentCategory;
+    private String treatmentRecommendation;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     private String status;

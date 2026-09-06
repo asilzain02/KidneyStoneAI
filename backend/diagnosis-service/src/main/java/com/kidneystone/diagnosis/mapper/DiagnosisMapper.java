@@ -107,6 +107,11 @@ public class DiagnosisMapper {
         resp.setProcessingTimeMs(entity.getProcessingTimeMs());
         resp.setDevice(entity.getDevice());
 
+        resp.setSeverityLevel(entity.getSeverityLevel());
+        resp.setSeverityReason(entity.getSeverityReason());
+        resp.setTreatmentCategory(entity.getTreatmentCategory());
+        resp.setTreatmentRecommendation(entity.getTreatmentRecommendation());
+
         resp.setStatus(entity.getStatus());
         resp.setCreatedAt(entity.getCreatedAt());
 

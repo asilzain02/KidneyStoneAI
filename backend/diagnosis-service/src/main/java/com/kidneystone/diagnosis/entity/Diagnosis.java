@@ -132,6 +132,20 @@ public class Diagnosis {
     @Column(name = "full_result_json", columnDefinition = "TEXT")
     private String fullResultJson;
 
+    // ── Clinical Decision Support ──────────────────────────────────────────
+
+    @Column(name = "severity_level", length = 30)
+    private String severityLevel;
+
+    @Column(name = "severity_reason", length = 1024)
+    private String severityReason;
+
+    @Column(name = "treatment_category", length = 50)
+    private String treatmentCategory;
+
+    @Column(name = "treatment_recommendation", length = 1024)
+    private String treatmentRecommendation;
+
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
     @Column(name = "status", length = 20, nullable = false)
