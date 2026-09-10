@@ -80,4 +80,14 @@ public class DiagnosisResponse {
 
     private String status;
     private LocalDateTime createdAt;
+
+    // ── Visual Analysis ───────────────────────────────────────────────────────
+
+    /**
+     * URL to retrieve the comparison PNG image for this diagnosis.
+     * Endpoint: GET /api/v1/diagnoses/{id}/comparison
+     * Returns Content-Type: image/png.
+     * Null if the comparison has not yet been generated.
+     */
+    private String comparisonImageUrl;
 }

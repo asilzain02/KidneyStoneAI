@@ -131,6 +131,12 @@ public class DiagnosisMapper {
             }
         }
 
+        // Comparison image URL — derived deterministically from the diagnosis ID.
+        // The actual image is served by GET /api/v1/diagnoses/{id}/comparison.
+        if (entity.getId() != null) {
+            resp.setComparisonImageUrl("/api/v1/diagnoses/" + entity.getId() + "/comparison");
+        }
+
         return resp;
     }
 

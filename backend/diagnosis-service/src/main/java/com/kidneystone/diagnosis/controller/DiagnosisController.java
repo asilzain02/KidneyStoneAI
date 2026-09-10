@@ -204,6 +204,32 @@ public class DiagnosisController {
     }
 
     /**
+     * GET /api/v1/diagnoses/{id}/comparison
+     * Purpose: Retrieve the generated deterministic clinical comparison PNG.
+     */
+    @GetMapping(value = "/{id}/comparison", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "Get the generated clinical comparison visual (PNG)")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getComparisonImage(
+            @PathVariable UUID id,
+            @RequestHeader(value = org.springframework.http.HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
+        try {
+            byte[] imageBytes = diagnosisService.getComparisonImage(id, authHeader);
+            return ResponseEntity
+                    .ok()
+                    .contentType(MediaType.IMAGE_PNG)
+                    .body(imageBytes);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("Failed to fetch comparison image for diagnosis {}: {}", id, e.getMessage());
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(errorBody("Comparison image generation failed."));
+        }
+    }
+
+    /**
      * Purpose:
      *   Build a simple error body map so callers get a JSON object instead
      *   of an empty response on error.

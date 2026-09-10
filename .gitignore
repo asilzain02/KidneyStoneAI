@@ -126,6 +126,7 @@ Thumbs.db
 desktop.ini
 
 # ─── BACKUP ─────────────────────────────────────────────────────
+README-copy.md
 database/backup/
 *.bak
 *.dump

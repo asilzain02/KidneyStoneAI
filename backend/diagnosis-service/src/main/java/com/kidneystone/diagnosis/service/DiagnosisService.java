@@ -14,6 +14,7 @@ import com.kidneystone.diagnosis.client.ImageServiceClient.DownloadedImage;
 import com.kidneystone.diagnosis.client.SeverityServiceClient;
 import com.kidneystone.diagnosis.client.TreatmentServiceClient;
 import com.kidneystone.diagnosis.client.ReportServiceClient;
+import com.kidneystone.diagnosis.client.AiEngineFileClient;
 import com.kidneystone.diagnosis.dto.external.SeverityRequest;
 import com.kidneystone.diagnosis.dto.external.SeverityResponse;
 import com.kidneystone.diagnosis.dto.external.TreatmentRequest;
@@ -62,6 +63,8 @@ public class DiagnosisService {
     private final ReportServiceClient reportServiceClient;
     private final DiagnosisMapper diagnosisMapper;
     private final ObjectMapper objectMapper;
+    private final DiagnosisComparisonGenerator comparisonGenerator;
+    private final AiEngineFileClient aiEngineFileClient;
 
     /** AI Engine base URL — used to construct heatmap/overlay download URLs. */
     @Value("${ai-engine.base-url:http://localhost:8000}")
@@ -187,6 +190,26 @@ public class DiagnosisService {
                 diagnosis.getProcessingTimeMs()
         );
 
+        // ── 6. Generate comparison image (non-fatal) ──────────────────────────────────
+        // Purpose:
+        // Attempt to generate the comparison PNG now so the first GET /comparison
+        // request can serve a cached file.  A failure here does NOT fail the
+        // diagnosis itself — the comparison can be generated lazily on first GET.
+        try {
+            byte[] gradCamBytes = null;
+            if (diagnosis.getInferenceId() != null && diagnosis.getOverlayPath() != null) {
+                String overlayFilename = extractFilename(diagnosis.getOverlayPath());
+                gradCamBytes = aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), overlayFilename);
+            }
+            // Re-download CT bytes for compositing (already fetched above, but image is local variable)
+            byte[] ctBytes = image.getBytes();
+            comparisonGenerator.generateAndCache(diagnosis, ctBytes, gradCamBytes);
+            log.info("Comparison image pre-generated for diagnosisId={}", diagnosis.getId());
+        } catch (Exception e) {
+            log.warn("Comparison image generation failed (non-fatal): diagnosisId={}, error={}",
+                    diagnosis.getId(), e.getMessage());
+        }
+
         return diagnosisMapper.toResponse(diagnosis, aiEngineBaseUrl);
     }
 
@@ -266,5 +289,76 @@ public class DiagnosisService {
     private String truncate(String value, int maxLength) {
         if (value == null) return null;
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    /** Extract the filename component from a file path string. */
+    private String extractFilename(String path) {
+        if (path == null) return null;
+        String normalized = path.replace("\\", "/");
+        int idx = normalized.lastIndexOf('/');
+        return idx >= 0 ? normalized.substring(idx + 1) : normalized;
+    }
+
+    // ── Comparison image ─────────────────────────────────────────────────────────────
+
+    /**
+     * Purpose:
+     *   Return the raw bytes of the comparison PNG for a given diagnosis.
+     *
+     *   Algorithm:
+     *     1. Look up the diagnosis (throws IllegalArgumentException if not found).
+     *     2. Check for a cached file — return immediately if present.
+     *     3. Otherwise, download the CT image from Image Service and the Grad-CAM
+     *        overlay from AI Engine (if available), render the composite, cache it,
+     *        and return the bytes.
+     *
+     * @param diagnosisId  UUID of the diagnosis
+     * @param authHeader   Bearer token forwarded to Image Service
+     * @return             raw PNG bytes ready for the HTTP response
+     * @throws IllegalArgumentException if the diagnosis does not exist
+     * @throws RuntimeException         if image data cannot be obtained
+     */
+    @Transactional(readOnly = true)
+    public byte[] getComparisonImage(UUID diagnosisId, String authHeader) {
+        Diagnosis diagnosis = diagnosisRepository
+                .findById(diagnosisId)
+                .orElseThrow(() -> new IllegalArgumentException("Diagnosis not found: " + diagnosisId));
+
+        // Check cache first
+        java.nio.file.Path cached = comparisonGenerator.getCachedPath(diagnosisId.toString());
+        if (cached != null) {
+            try {
+                return java.nio.file.Files.readAllBytes(cached);
+            } catch (java.io.IOException e) {
+                log.warn("Cached comparison file unreadable, will regenerate: {}", e.getMessage());
+            }
+        }
+
+        // Lazy generation — fetch CT image
+        byte[] ctBytes;
+        try {
+            DownloadedImage img = imageServiceClient.downloadImage(diagnosis.getImageId(), authHeader);
+            ctBytes = img.getBytes();
+        } catch (Exception e) {
+            log.error("Could not download CT image for comparison generation: diagnosisId={}, error={}",
+                    diagnosisId, e.getMessage());
+            throw new RuntimeException("Cannot generate comparison: original CT image unavailable.", e);
+        }
+
+        // Fetch Grad-CAM overlay (non-fatal if absent)
+        byte[] gradCamBytes = null;
+        if (diagnosis.getInferenceId() != null && diagnosis.getOverlayPath() != null) {
+            String overlayFilename = extractFilename(diagnosis.getOverlayPath());
+            gradCamBytes = aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), overlayFilename);
+        }
+
+        try {
+            java.nio.file.Path generated =
+                    comparisonGenerator.generateAndCache(diagnosis, ctBytes, gradCamBytes);
+            return java.nio.file.Files.readAllBytes(generated);
+        } catch (java.io.IOException e) {
+            log.error("Failed to generate comparison image: diagnosisId={}, error={}", diagnosisId, e.getMessage());
+            throw new RuntimeException("Comparison image generation failed.", e);
+        }
     }
 }
