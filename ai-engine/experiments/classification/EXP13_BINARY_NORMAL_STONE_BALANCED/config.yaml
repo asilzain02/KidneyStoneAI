@@ -1,0 +1,98 @@
+# ════════════════════════════════════════════════════════════
+# EXP13 — Binary Normal-vs-Stone + Balanced Training
+# ════════════════════════════════════════════════════════════
+#
+# Experiment ID : EXP13_BINARY_NORMAL_STONE_BALANCED
+#
+# Intentional changes vs. 4-class baseline:
+#   1. Binary classification: Normal (0) vs Stone (1) only
+#   2. Training set is balanced via WeightedRandomSampler
+#
+# Everything else is inherited from the baseline.
+# ════════════════════════════════════════════════════════════
+
+experiment:
+  id: EXP13_BINARY_NORMAL_STONE_BALANCED
+  description: >
+    Binary Normal-vs-Stone EfficientNet-B0 classifier with
+    balanced training data (WeightedRandomSampler).
+    Tests whether removing Cyst/Tumor and balancing Normal/Stone
+    improves external generalisation.
+
+# ── Classes ──────────────────────────────────────────────────
+classes:
+  class_names:
+    - Normal
+    - Stone
+  class_to_index:
+    Normal: 0
+    Stone: 1
+  num_classes: 2
+  positive_class: Stone     # used for ROC-AUC and binary metrics
+  positive_index: 1
+
+# ── Source data ───────────────────────────────────────────────
+data:
+  source_split_dir: datasets/splits/classification
+  train_csv: datasets/splits/classification/train.csv
+  val_csv:   datasets/splits/classification/val.csv
+  test_csv:  datasets/splits/classification/test.csv
+  # Filter: only Normal and Stone rows will be used
+  allowed_classes: [Normal, Stone]
+
+# ── External dataset ─────────────────────────────────────────
+external:
+  root: "datasets/raw/classification/additional_dataset/Kidney Stone Dataset/Original"
+  stone_dir:     "Stone"
+  non_stone_dir: "Non-Stone"
+  label_mapping:
+    Stone:     1
+    Non-Stone: 0
+
+# ── Model ────────────────────────────────────────────────────
+model:
+  backbone: efficientnet_b0    # SAME as baseline — DO NOT change
+  pretrained: true             # ImageNet weights
+  dropout: 0.3                 # SAME as baseline
+
+# ── Training — inherited from baseline, documented here ──────
+training:
+  inherited_from_baseline: true
+  intentional_changes:
+    - binary_classification
+    - training_set_balancing
+
+  optimizer: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  batch_size: 32
+  num_epochs: 50
+  scheduler: cosine_annealing
+  scheduler_T_max: 50
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+  input_size: 224
+  seed: 42
+  deterministic: true
+
+  # Augmentation: baseline strategy (SAME as baseline, no changes)
+  augmentation_strategy: baseline
+
+# ── Balancing ─────────────────────────────────────────────────
+balancing:
+  method: WeightedRandomSampler
+  apply_to: train_only    # NEVER applied to val/test/external
+  note: >
+    Weights are computed from the filtered training split labels only.
+    Oversampling is done via index sampling — no image files are copied.
+
+# ── Output paths ─────────────────────────────────────────────
+output:
+  dir: ai-engine/experiments/classification/EXP13_BINARY_NORMAL_STONE_BALANCED/outputs
+  checkpoint_name: best_model_exp13_binary_normal_stone_balanced.pth
+  history: logs/training_history.json
+  val_metrics: metrics/validation_results.json
+  test_metrics: metrics/test_results.json
+  ext_metrics: metrics/external_results.json
+  ext_predictions: predictions/external_predictions.csv
+  manifest: dataset/generated_manifest.csv

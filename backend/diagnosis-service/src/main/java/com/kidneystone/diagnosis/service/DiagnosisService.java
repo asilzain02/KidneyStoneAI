@@ -201,9 +201,14 @@ public class DiagnosisService {
                 String overlayFilename = extractFilename(diagnosis.getOverlayPath());
                 gradCamBytes = aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), overlayFilename);
             }
+            byte[] segOverlayBytes = null;
+            if (diagnosis.getInferenceId() != null) {
+                String segFilename = diagnosis.getInferenceId() + "_seg_overlay.png";
+                segOverlayBytes = aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), segFilename);
+            }
             // Re-download CT bytes for compositing (already fetched above, but image is local variable)
             byte[] ctBytes = image.getBytes();
-            comparisonGenerator.generateAndCache(diagnosis, ctBytes, gradCamBytes);
+            comparisonGenerator.generateAndCache(diagnosis, ctBytes, gradCamBytes, segOverlayBytes);
             log.info("Comparison image pre-generated for diagnosisId={}", diagnosis.getId());
         } catch (Exception e) {
             log.warn("Comparison image generation failed (non-fatal): diagnosisId={}, error={}",
@@ -352,9 +357,15 @@ public class DiagnosisService {
             gradCamBytes = aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), overlayFilename);
         }
 
+        byte[] segOverlayBytes = null;
+        if (diagnosis.getInferenceId() != null) {
+            String segFilename = diagnosis.getInferenceId() + "_seg_overlay.png";
+            segOverlayBytes = aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), segFilename);
+        }
+
         try {
             java.nio.file.Path generated =
-                    comparisonGenerator.generateAndCache(diagnosis, ctBytes, gradCamBytes);
+                    comparisonGenerator.generateAndCache(diagnosis, ctBytes, gradCamBytes, segOverlayBytes);
             return java.nio.file.Files.readAllBytes(generated);
         } catch (java.io.IOException e) {
             log.error("Failed to generate comparison image: diagnosisId={}, error={}", diagnosisId, e.getMessage());

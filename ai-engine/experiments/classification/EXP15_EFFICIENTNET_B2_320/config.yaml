@@ -1,0 +1,83 @@
+# ════════════════════════════════════════════════════════════════════
+# EXP15_EFFICIENTNET_B2_320 — Configuration
+# ════════════════════════════════════════════════════════════════════
+#
+# SCIENTIFIC QUESTION:
+#   Does EfficientNet-B2 at 320×320 preserve more fine-grained
+#   visual detail and improve stone discrimination compared to
+#   EfficientNet-B0 at 224×224?
+#
+# INTENTIONAL CHANGES vs baseline:
+#   1. Backbone: efficientnet_b0 → efficientnet_b2
+#   2. Input size: 224 → 320
+#
+# UNCHANGED: dataset, classes, preprocessing, loss, optim, split, seed
+# ════════════════════════════════════════════════════════════════════
+
+experiment:
+  id: EXP15_EFFICIENTNET_B2_320
+  description: >
+    EfficientNet-B2 at 320×320 for 4-class kidney CT classification.
+    Tests whether a larger backbone and higher resolution improve
+    fine-grained stone discrimination.
+  seed: 42
+  deterministic: true
+
+classes:
+  names: [Normal, Cyst, Stone, Tumor]
+  num_classes: 4
+  label_map:
+    Normal: 0
+    Cyst:   1
+    Stone:  2
+    Tumor:  3
+
+data:
+  train_csv: datasets/splits/classification/train.csv
+  val_csv:   datasets/splits/classification/val.csv
+  test_csv:  datasets/splits/classification/test.csv
+
+external:
+  root: "datasets/raw/classification/additional_dataset/Kidney Stone Dataset/Original"
+  expected_total: 3364
+  stone_label: 2
+  threshold: 0.5
+
+model:
+  backbone: efficientnet_b2    # CHANGED (was efficientnet_b0)
+  pretrained: true
+  num_classes: 4
+  dropout: 0.3
+
+training:
+  # PRIMARY selection metric: Validation Macro F1
+  inherited_from_baseline: true
+  intentional_changes:
+    - backbone_efficientnet_b2
+    - input_size_320
+  optimizer: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  batch_size: 8          # Conservative for GTX 1060 6 GB with 320×320
+  num_epochs: 50
+  scheduler: cosine_annealing
+  scheduler_T_max: 50
+  early_stopping_patience: 10
+  early_stopping_metric: val_macro_f1
+  input_size: 320        # CHANGED (was 224)
+  augmentation_strategy: baseline   # same as baseline
+
+output:
+  dir: ai-engine/experiments/classification/EXP15_EFFICIENTNET_B2_320/outputs
+  checkpoint_name: best_model_exp15_b2_320.pth
+  latest_name: latest_checkpoint_exp15.pth
+
+# ── GPU safety ────────────────────────────────────────────────────
+# GTX 1060 has ~6 GB VRAM.
+# batch_size=8 + 320×320 + B2 is conservative-safe.
+# If OOM, reduce batch_size in this file and restart.
+# DO NOT silently reduce batch_size at runtime.
+gpu_safety:
+  note: >
+    If CUDA OOM occurs, lower batch_size above and restart.
+    The script will NOT automatically adjust batch_size.

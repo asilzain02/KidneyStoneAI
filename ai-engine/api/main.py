@@ -19,6 +19,10 @@ Run locally:
     cd ai-engine
     uvicorn api.main:app --reload --port 8000
 
+Run in KindeyStoneAI (ROOT)
+    .\.venv-ai\Scripts\Activate.ps1
+    python -m uvicorn api.main:app --app-dir .\ai-engine --host 0.0.0.0 --port 8000
+
 Environment variables:
     KIDNEY_AI_CLF_CHECKPOINT   — path to classification .pth checkpoint
     KIDNEY_AI_SEG_CHECKPOINT   — path to segmentation .pth checkpoint

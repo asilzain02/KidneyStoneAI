@@ -57,20 +57,25 @@ public class AiEngineFileClient {
         }
 
         try {
+            log.info("[FILE-FETCH] requesting AI file endpoint... filename={}", filename);
             ResponseEntity<byte[]> resp = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
 
             if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
-                log.debug("Fetched AI Engine file: inferenceId={}, filename={}, size={}B",
-                        inferenceId, filename, resp.getBody().length);
+                log.info("[FILE-FETCH] inferenceId={}, filename={}, HTTP={}, bytes={}",
+                        inferenceId, filename, resp.getStatusCodeValue(), resp.getBody().length);
                 return resp.getBody();
             }
 
-            log.warn("AI Engine file not found or empty: url={}, status={}", url, resp.getStatusCode());
+            log.warn("[FILE-FETCH-WARN] AI Engine file not found or empty: filename={}, url={}, HTTP={}", 
+                     filename, url, resp.getStatusCodeValue());
             return null;
 
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            log.error("[FILE-FETCH-ERROR] HTTP {} on {}: {}", e.getStatusCode(), filename, e.getResponseBodyAsString());
+            return null;
         } catch (Exception e) {
-            log.warn("Could not fetch AI Engine file (non-fatal): url={}, error={}", url, e.getMessage());
+            log.error("[FILE-FETCH-ERROR] Exception on {}: {}", filename, e.getMessage());
             return null;
         }
     }

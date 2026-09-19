@@ -17,95 +17,48 @@ import java.nio.file.Paths;
 
 /**
  * Purpose:
- *   Generate a deterministic, composite PNG comparison image for a completed
- *   diagnosis from ACTUAL system outputs only.
- *
- *   The image layout is:
- *
- *   ┌─────────────────────────────────────────────────────────────────────┐
- *   │               KIDNEY STONE — AI ANALYSIS COMPARISON                │
- *   ├──────────────────────┬──────────────────────┬───────────────────────┤
- *   │   ORIGINAL CT IMAGE  │   CLASSIFICATION     │   SEGMENTATION RESULT │
- *   │                      │                      │                       │
- *   │  <actual CT bytes>   │  Class: Stone        │  Detected: No         │
- *   │                      │  Confidence: 98.7%   │  Area: 0 px           │
- *   │                      │                      │  Coverage: 0.0%       │
- *   ├──────────────────────┴──────────────────────┴───────────────────────┤
- *   │   CONSISTENCY / CROSS-VALIDATION                                     │
- *   │   Status: PARTIAL_DISAGREEMENT                                       │
- *   │   Classification predicts kidney stone, but segmentation did not …  │
- *   ├─────────────────────────────────────────────────────────────────────┤
- *   │   GRAD-CAM / EXPLAINABILITY  (if available)                         │
- *   │  <actual heatmap/overlay image>                                      │
- *   └─────────────────────────────────────────────────────────────────────┘
- *
- *   Rules:
- *     - Uses ONLY actual data from the Diagnosis entity.
- *     - Does NOT fabricate medical findings.
- *     - Segmentation and classification are shown independently.
- *     - Disagreement is clearly displayed, not hidden.
- *     - If Grad-CAM is unavailable the panel is omitted cleanly.
- *     - Output is a standard PNG file.
- *
- *   Terminology:
- *     All user-facing text uses "AI prediction / Model confidence" language,
- *     never "confirmed diagnosis / guaranteed result."
- *
- *   Thread safety: stateless — safe for concurrent calls.
+ *   Generate a highly professional, 3-panel clinical composite PNG comparison image.
+ *   
+ *   Design Architecture:
+ *   1| Original CT               - Exact unmodified source
+ *   2| Segmentation mask         - Localization Evidence ("WHERE")
+ *   3| GradCam heatmap           - Classification Explainability ("WHY")
+ *   
+ *   Followed by Consistency block, then fully expanded 4-column metadata tracking.
  */
 @Slf4j
 @Component
 public class DiagnosisComparisonGenerator {
 
-    // ── Layout constants ─────────────────────────────────────────────────────
+    private static final int PANEL_W      = 640;
+    private static final int PANEL_H      = 640;
+    private static final int NUMERAL_PAD  = 30;
+    private static final int HEADER_H     = 100;
+    private static final int CONSIST_H    = 140;
+    private static final int STATS_H      = 220;
+    private static final int FOOTER_H     = 50;
+    private static final int TOTAL_W      = PANEL_W * 3; // 1920
 
-    private static final int PANEL_W      = 420;   // width of each top panel
-    private static final int PANEL_H      = 340;   // height of image area in top panels
-    private static final int NUMERAL_PAD  = 20;    // internal cell padding
-    private static final int HEADER_H     = 60;    // top banner height
-    private static final int CONSIST_H    = 120;   // consistency panel height
-    private static final int GRADCAM_H    = 300;   // Grad-CAM panel height (when present)
-    private static final int FOOTER_H     = 36;    // disclaimer footer
-    private static final int TOTAL_W      = PANEL_W * 3;
-
-    // ── Colour palette ───────────────────────────────────────────────────────
-
-    private static final Color COL_BG_DARK    = new Color(18,  24,  38);   // canvas background
-    private static final Color COL_BG_PANEL   = new Color(28,  36,  54);   // panel background
-    private static final Color COL_BG_HEADER  = new Color(12,  16,  28);   // header strip
-    private static final Color COL_BORDER     = new Color(55,  72, 110);   // panel border
-    private static final Color COL_ACCENT     = new Color(91, 146, 255);   // accent blue
-    private static final Color COL_WARN       = new Color(255, 180,  50);  // warning amber
-    private static final Color COL_OK         = new Color( 60, 200, 130);  // success green
-    private static final Color COL_LABEL      = new Color(160, 180, 220);  // secondary label
-    private static final Color COL_VALUE      = new Color(230, 240, 255);  // primary value
-    private static final Color COL_SEPARATOR  = new Color(40,  52,  80);   // separator line
-    private static final Color COL_DISCLAIMER = new Color(100, 115, 150);  // disclaimer text
-
-    // ── Storage ──────────────────────────────────────────────────────────────
+    private static final Color COL_BG_DARK    = new Color(20,  24,  32);
+    private static final Color COL_BG_PANEL   = new Color(30,  36,  48);
+    private static final Color COL_BG_HEADER  = new Color(14,  18,  26);
+    private static final Color COL_BORDER     = new Color(55,  72, 110);
+    private static final Color COL_ACCENT     = new Color(91, 146, 255);
+    private static final Color COL_WARN       = new Color(255, 160,  40);
+    private static final Color COL_OK         = new Color( 60, 200, 130);
+    private static final Color COL_ERROR      = new Color(235,  80,  80);
+    private static final Color COL_LABEL      = new Color(170, 190, 230);
+    private static final Color COL_VALUE      = new Color(240, 245, 255);
+    private static final Color COL_SEPARATOR  = new Color(42,  54,  82);
+    private static final Color COL_DISCLAIMER = new Color(110, 125, 160);
 
     @Value("${diagnosis.comparison.output-dir:${java.io.tmpdir}/kidneystone-comparisons}")
     private String outputDir;
 
-    // ── Public API ───────────────────────────────────────────────────────────
-
-    /**
-     * Purpose:
-     *   Generate (or retrieve a cached) comparison image for the given diagnosis.
-     *
-     *   Cache key: {outputDir}/{diagnosisId}.png
-     *   If the file already exists it is returned directly without re-rendering.
-     *
-     * @param diagnosis       saved, completed Diagnosis entity
-     * @param originalCtBytes raw bytes of the original CT image (from Image Service)
-     * @param gradCamBytes    raw bytes of the Grad-CAM overlay (may be null)
-     * @return absolute Path to the written PNG file
-     */
-    public Path generateAndCache(Diagnosis diagnosis, byte[] originalCtBytes, byte[] gradCamBytes)
+    public Path generateAndCache(Diagnosis diagnosis, byte[] originalCtBytes, byte[] gradCamBytes, byte[] segOverlayBytes)
             throws IOException {
 
         ensureOutputDirExists();
-
         Path outputPath = buildOutputPath(diagnosis.getId().toString());
 
         if (Files.exists(outputPath)) {
@@ -113,324 +66,255 @@ public class DiagnosisComparisonGenerator {
             return outputPath;
         }
 
-        BufferedImage composite = render(diagnosis, originalCtBytes, gradCamBytes);
+        log.info("Generating comparison PNG. OriginalCT: {} bytes, GradCam: {} bytes, SegOverlay: {} bytes",
+                originalCtBytes != null ? originalCtBytes.length : 0, 
+                gradCamBytes != null ? gradCamBytes.length : 0, 
+                segOverlayBytes != null ? segOverlayBytes.length : 0);
+
+        BufferedImage composite = render(diagnosis, originalCtBytes, gradCamBytes, segOverlayBytes);
         try (OutputStream os = Files.newOutputStream(outputPath)) {
             ImageIO.write(composite, "PNG", os);
         }
 
-        log.info("Comparison image written: {}", outputPath);
+        log.info("Comparison image successfully written: {}", outputPath);
         return outputPath;
     }
 
-    /**
-     * Purpose:
-     *   Return the cached PNG path if it exists, otherwise null.
-     *   Used by the endpoint to serve without re-generating.
-     */
     public Path getCachedPath(String diagnosisId) {
         Path p = buildOutputPath(diagnosisId);
         return Files.exists(p) ? p : null;
     }
 
-    // ── Rendering ────────────────────────────────────────────────────────────
-
-    private BufferedImage render(Diagnosis d, byte[] ctBytes, byte[] gradCamBytes) {
-
-        boolean hasGradCam = gradCamBytes != null && gradCamBytes.length > 0;
-
-        int totalH = HEADER_H + PANEL_H + CONSIST_H + (hasGradCam ? GRADCAM_H : 0) + FOOTER_H;
+    private BufferedImage render(Diagnosis d, byte[] ctBytes, byte[] gradCamBytes, byte[] segOverlayBytes) {
+        int totalH = HEADER_H + PANEL_H + CONSIST_H + STATS_H + FOOTER_H;
         BufferedImage canvas = new BufferedImage(TOTAL_W, totalH, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = canvas.createGraphics();
 
         enableAntiAliasing(g);
+        
+        // Deep background layer
         g.setColor(COL_BG_DARK);
         g.fillRect(0, 0, TOTAL_W, totalH);
 
         int y = 0;
-
-        // 1. Banner header
         y = drawHeader(g, y);
-
-        // 2. Three top panels
-        y = drawTopPanels(g, d, ctBytes, y);
-
-        // 3. Consistency bar
+        y = drawTopPanels(g, d, ctBytes, gradCamBytes, segOverlayBytes, y);
         y = drawConsistencyPanel(g, d, y);
-
-        // 4. Grad-CAM panel (conditional)
-        if (hasGradCam) {
-            y = drawGradCamPanel(g, d, gradCamBytes, y);
-        }
-
-        // 5. Footer disclaimer
+        y = drawStatsGrid(g, d, y);
         drawFooter(g, y);
 
         g.dispose();
         return canvas;
     }
 
-    // ── Section renderers ─────────────────────────────────────────────────────
-
     private int drawHeader(Graphics2D g, int y) {
         g.setColor(COL_BG_HEADER);
         g.fillRect(0, y, TOTAL_W, HEADER_H);
-
-        // Accent line
+        
         g.setColor(COL_ACCENT);
-        g.fillRect(0, y + HEADER_H - 3, TOTAL_W, 3);
-
+        g.fillRect(0, y + HEADER_H - 4, TOTAL_W, 4);
+        
         g.setColor(COL_VALUE);
-        g.setFont(boldFont(22));
+        g.setFont(boldFont(28));
         String title = "KIDNEY STONE — AI-ASSISTED CT ANALYSIS";
         int tw = g.getFontMetrics().stringWidth(title);
-        g.drawString(title, (TOTAL_W - tw) / 2, y + 38);
+        g.drawString(title, (TOTAL_W - tw) / 2, y + 45);
 
+        g.setColor(COL_LABEL);
+        g.setFont(boldFont(16));
+        String sub = "Automated Detection • Explainable AI • Clinical Decision Support";
+        int sw = g.getFontMetrics().stringWidth(sub);
+        g.drawString(sub, (TOTAL_W - sw) / 2, y + 75);
         return y + HEADER_H;
     }
 
-    private int drawTopPanels(Graphics2D g, Diagnosis d, byte[] ctBytes, int y) {
-        drawOriginalCt(g,           0,          y, ctBytes);
-        drawClassification(g,  PANEL_W,          y, d);
-        drawSegmentation(g, PANEL_W * 2,          y, d);
+    private int drawTopPanels(Graphics2D g, Diagnosis d, byte[] ctBytes, byte[] gradCamBytes, byte[] segOverlayBytes, int y) {
+        drawOriginalCt(g, 0, y, ctBytes);
+        drawSegmentationImg(g, PANEL_W, y, d, segOverlayBytes);
+        drawGradCamImg(g, PANEL_W * 2, y, d, gradCamBytes);
         return y + PANEL_H;
     }
 
-    /** Panel 1: Original CT image rendered to fit the panel */
     private void drawOriginalCt(Graphics2D g, int x, int y, byte[] ctBytes) {
         drawPanelBackground(g, x, y, PANEL_W, PANEL_H);
+        drawPanelHeader(g, x, y, "ORIGINAL CT IMAGE");
+        
+        boolean loaded = drawImageBlock(g, x, y + 40, PANEL_W, PANEL_H - 100, ctBytes, "Source CT Unavailable", "ORIGINAL-CT");
+        
+        if (loaded) {
+            drawCentred(g, x + PANEL_W/2, y + PANEL_H - 40, "Unmodified Source Scan", COL_VALUE, boldFont(16));
+            drawCentred(g, x + PANEL_W/2, y + PANEL_H - 18, "Diagnostic Input", COL_DISCLAIMER, plainFont(13));
+        }
+    }
 
-        String label = "ORIGINAL CT IMAGE";
-        drawPanelLabel(g, x, y, label, COL_ACCENT);
+    private void drawSegmentationImg(Graphics2D g, int x, int y, Diagnosis d, byte[] segBytes) {
+        drawPanelBackground(g, x, y, PANEL_W, PANEL_H);
+        drawPanelHeader(g, x, y, "SEGMENTATION RESULT — WHERE IS THE STONE?");
+        
+        boolean loaded = drawImageBlock(g, x, y + 40, PANEL_W, PANEL_H - 100, segBytes, "Visualisation Artifact Unavailable", "SEGMENTATION");
+        
+        boolean detected = Boolean.TRUE.equals(d.getStoneDetected());
+        String msg = detected ? "\u25CF Detected Stone Region (Segmentation Mask)" : "No Regions Detected Above Threshold";
+        Color c = detected ? COL_WARN : COL_LABEL;
+        
+        if (!detected && !loaded) {
+             msg = "No Stone Detected";
+        }
+        
+        drawCentred(g, x + PANEL_W/2, y + PANEL_H - 40, msg, c, boldFont(16));
+        drawCentred(g, x + PANEL_W/2, y + PANEL_H - 18, "Architecture localization evidence", COL_DISCLAIMER, plainFont(13));
+    }
 
-        int imgY = y + 32;
-        int imgH = PANEL_H - 40;
+    private void drawGradCamImg(Graphics2D g, int x, int y, Diagnosis d, byte[] gcBytes) {
+        drawPanelBackground(g, x, y, PANEL_W, PANEL_H);
+        drawPanelHeader(g, x, y, "GRAD-CAM — WHY DID THE MODEL PREDICT?");
+        
+        boolean loaded = drawImageBlock(g, x, y + 40, PANEL_W, PANEL_H - 100, gcBytes, "Grad-CAM Artifact Unavailable", "GRAD-CAM");
+        
+        String legendStr = loaded ? "Low Influence \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 High Influence" : "";
+        drawCentred(g, x + PANEL_W/2, y + PANEL_H - 40, legendStr, COL_VALUE, boldFont(14));
+        drawCentred(g, x + PANEL_W/2, y + PANEL_H - 18, "Classification model explainability", COL_DISCLAIMER, plainFont(13));
+    }
 
-        if (ctBytes != null && ctBytes.length > 0) {
+    /** Returns true if image successfully decoded. */
+    private boolean drawImageBlock(Graphics2D g, int bx, int by, int bw, int bh, byte[] bytes, String fallback, String logLabel) {
+        if (bytes != null && bytes.length > 0) {
             try {
-                BufferedImage ct = ImageIO.read(new ByteArrayInputStream(ctBytes));
-                if (ct != null) {
-                    // Scale preserving aspect ratio
-                    int[] dims = scaledDims(ct.getWidth(), ct.getHeight(), PANEL_W - NUMERAL_PAD * 2, imgH - NUMERAL_PAD);
-                    int ix = x + (PANEL_W - dims[0]) / 2;
-                    int iy = imgY + (imgH - dims[1]) / 2;
-                    g.drawImage(ct, ix, iy, dims[0], dims[1], null);
-                    return;
+                BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+                if (img != null) {
+                    log.info("[{}] decoded=true, dimensions={}x{}", logLabel, img.getWidth(), img.getHeight());
+                    int padX = 40;
+                    int padY = 20;
+                    int[] dims = scaledDims(img.getWidth(), img.getHeight(), bw - padX * 2, bh - padY * 2);
+                    int ix = bx + (bw - dims[0]) / 2;
+                    int iy = by + (bh - dims[1]) / 2;
+                    
+                    // Draw black background behind image so it stands out natively 
+                    g.setColor(Color.BLACK);
+                    g.fillRect(ix - 2, iy - 2, dims[0] + 4, dims[1] + 4);
+                    
+                    g.drawImage(img, ix, iy, dims[0], dims[1], null);
+                    return true;
+                } else {
+                    log.warn("[{}] decoded=false (ImageIO returned null)", logLabel);
                 }
             } catch (IOException e) {
-                log.warn("Could not decode CT image for comparison panel: {}", e.getMessage());
+                log.error("[{}] Image decode payload failed: {}", logLabel, e.getMessage());
             }
-        }
-
-        // Fallback: placeholder
-        drawPlaceholderBox(g, x + NUMERAL_PAD, imgY + NUMERAL_PAD / 2,
-                PANEL_W - NUMERAL_PAD * 2, imgH - NUMERAL_PAD, "CT image unavailable");
-    }
-
-    /** Panel 2: Classification result — text only, no fabricated imagery */
-    private void drawClassification(Graphics2D g, int x, int y, Diagnosis d) {
-        drawPanelBackground(g, x, y, PANEL_W, PANEL_H);
-        drawPanelLabel(g, x, y, "CLASSIFICATION (AI PREDICTION)", COL_ACCENT);
-
-        int cy = y + 80;
-        int cx = x + PANEL_W / 2;
-
-        // Predicted class — large prominent display
-        String cls = d.getPredictedClass() != null ? d.getPredictedClass().toUpperCase() : "UNKNOWN";
-        Color classColor = classColor(d.getPredictedClass());
-
-        // Class chip
-        g.setFont(boldFont(32));
-        int cw = g.getFontMetrics().stringWidth(cls);
-        int chipPad = 18;
-        int chipW   = cw + chipPad * 2;
-        int chipH   = 54;
-        int chipX   = cx - chipW / 2;
-        g.setColor(classColor.darker().darker());
-        g.fillRoundRect(chipX, cy, chipW, chipH, 12, 12);
-        g.setColor(classColor);
-        g.drawRoundRect(chipX, cy, chipW, chipH, 12, 12);
-        g.setColor(Color.WHITE);
-        g.drawString(cls, chipX + chipPad, cy + 38);
-
-        cy += chipH + 20;
-
-        // Confidence
-        if (d.getConfidence() != null) {
-            double pct = d.getConfidence() * 100.0;
-            String confStr = String.format("%.2f%%", pct);
-
-            drawLabelValue(g, cx, cy, "Model Confidence", confStr, COL_LABEL, COL_VALUE);
-            cy += 30;
-
-            // Confidence bar
-            int barW = PANEL_W - NUMERAL_PAD * 4;
-            int barH = 10;
-            int barX = x + NUMERAL_PAD * 2;
-            g.setColor(COL_BG_DARK);
-            g.fillRoundRect(barX, cy, barW, barH, barH, barH);
-            int filled = (int) (barW * d.getConfidence());
-            g.setColor(classColor);
-            g.fillRoundRect(barX, cy, filled, barH, barH, barH);
         } else {
-            drawCentred(g, cx, cy + 14, "Confidence: N/A", COL_LABEL, plainFont(14));
+            log.warn("[{}] bytes array is null or empty", logLabel);
         }
-
-        cy += 36;
-
-        // Terminology disclaimer
-        int dW = PANEL_W - NUMERAL_PAD * 2;
-        drawWrapped(g, x + NUMERAL_PAD, cy, dW, "AI model prediction only.\nNot a confirmed clinical diagnosis.", COL_DISCLAIMER, plainFont(11));
+        drawPlaceholderBox(g, bx + 50, by + 50, bw - 100, bh - 100, fallback);
+        return false;
     }
 
-    /** Panel 3: Segmentation result — strictly from entity metadata, never fabricated */
-    private void drawSegmentation(Graphics2D g, int x, int y, Diagnosis d) {
-        drawPanelBackground(g, x, y, PANEL_W, PANEL_H);
-        drawPanelLabel(g, x, y, "SEGMENTATION RESULT", COL_ACCENT);
-
-        int cx = x + PANEL_W / 2;
-        int cy = y + 75;
-
-        boolean detected = Boolean.TRUE.equals(d.getStoneDetected());
-
-        // Detection badge
-        String badge = detected ? "STONE REGION DETECTED" : "NO REGION DETECTED";
-        Color badgeColor = detected ? COL_WARN : COL_LABEL;
-
-        g.setFont(boldFont(14));
-        int bw = g.getFontMetrics().stringWidth(badge);
-        int bPad = 12;
-        int bW   = bw + bPad * 2;
-        int bH   = 34;
-        int bX   = cx - bW / 2;
-        g.setColor(badgeColor.darker().darker());
-        g.fillRoundRect(bX, cy, bW, bH, 8, 8);
-        g.setColor(badgeColor);
-        g.drawRoundRect(bX, cy, bW, bH, 8, 8);
-        g.setColor(Color.WHITE);
-        g.drawString(badge, bX + bPad, cy + 22);
-
-        cy += bH + 28;
-
-        // Metadata table
-        Object[][] rows = {
-            {"Stone Area",      d.getStoneAreaPixels() != null ? d.getStoneAreaPixels() + " px" : "N/A"},
-            {"Coverage Ratio",  d.getCoverageRatio()   != null ? String.format("%.4f (%.2f%%)",
-                                    d.getCoverageRatio(), d.getCoverageRatio() * 100.0) : "N/A"},
-        };
-
-        for (Object[] row : rows) {
-            drawLabelValue(g, cx, cy, (String) row[0], (String) row[1], COL_LABEL, COL_VALUE);
-            cy += 30;
-        }
-
-        cy += 10;
-        // Visual note
-        String note = detected
-                ? "A potential stone region was identified by the segmentation model."
-                : "The segmentation model found no stone region above the detection threshold.";
-        int noteW = PANEL_W - NUMERAL_PAD * 2;
-        drawWrapped(g, x + NUMERAL_PAD, cy, noteW, note, COL_DISCLAIMER, plainFont(11));
-    }
-
-    /** Consistency panel — always shown with actual values */
     private int drawConsistencyPanel(Graphics2D g, Diagnosis d, int y) {
-        // Separator
         g.setColor(COL_SEPARATOR);
         g.fillRect(0, y, TOTAL_W, 2);
-
         g.setColor(COL_BG_PANEL);
         g.fillRect(0, y + 2, TOTAL_W, CONSIST_H);
-
-        // Accent side bar
+        
         String status = d.getConsistencyStatus();
         Color sideColor = consistencyColor(status);
         g.setColor(sideColor);
-        g.fillRect(0, y + 2, 5, CONSIST_H);
+        g.fillRect(0, y + 2, 8, CONSIST_H);
 
-        // Label
-        g.setFont(boldFont(13));
+        g.setFont(boldFont(16));
         g.setColor(COL_LABEL);
-        g.drawString("CONSISTENCY / CROSS-VALIDATION", NUMERAL_PAD + 8, y + 30);
+        g.drawString("CONSISTENCY / CROSS-VALIDATION", NUMERAL_PAD + 20, y + 45);
 
-        // Status badge
         String statusDisplay = status != null ? status.replace("_", " ") : "UNKNOWN";
-        g.setFont(boldFont(14));
+        g.setFont(boldFont(18));
         int sw = g.getFontMetrics().stringWidth(statusDisplay);
-        int sX = NUMERAL_PAD + 8;
-        int sY = y + 44;
-        int sPad = 10;
-        int sChipW = sw + sPad * 2;
-        int sChipH = 28;
-        g.setColor(sideColor.darker().darker());
-        g.fillRoundRect(sX, sY, sChipW, sChipH, 6, 6);
+        int sX = NUMERAL_PAD + 20;
+        int sY = y + 65;
+        int sPad = 15;
+        
+        g.setColor(new Color(sideColor.getRed(), sideColor.getGreen(), sideColor.getBlue(), 35));
+        g.fillRoundRect(sX, sY, sw + sPad * 2, 40, 8, 8);
         g.setColor(sideColor);
-        g.drawRoundRect(sX, sY, sChipW, sChipH, 6, 6);
+        g.setStroke(new BasicStroke(2));
+        g.drawRoundRect(sX, sY, sw + sPad * 2, 40, 8, 8);
         g.setColor(Color.WHITE);
-        g.drawString(statusDisplay, sX + sPad, sY + 19);
+        g.drawString(statusDisplay, sX + sPad, sY + 27);
 
-        // Message
-        if (d.getConsistencyMessage() != null && !d.getConsistencyMessage().isBlank()) {
-            int msgX = NUMERAL_PAD + 8;
-            int msgY = sY + sChipH + 14;
-            int msgW = TOTAL_W - NUMERAL_PAD * 2;
-            drawWrapped(g, msgX, msgY, msgW, d.getConsistencyMessage(), COL_VALUE, plainFont(13));
+        if (d.getConsistencyMessage() != null) {
+            drawWrapped(g, sX + sw + 70, y + 55, TOTAL_W - 400, d.getConsistencyMessage(), COL_VALUE, plainFont(18));
         }
-
         return y + CONSIST_H;
     }
 
-    /** Grad-CAM panel — shown only when actual Grad-CAM bytes are available */
-    private int drawGradCamPanel(Graphics2D g, Diagnosis d, byte[] gradCamBytes, int y) {
+    private int drawStatsGrid(Graphics2D g, Diagnosis d, int y) {
         g.setColor(COL_SEPARATOR);
         g.fillRect(0, y, TOTAL_W, 2);
+        g.setColor(COL_BG_DARK);
+        g.fillRect(0, y+2, TOTAL_W, STATS_H);
+        
+        int statW = TOTAL_W / 4;
+        
+        // Col 1
+        int cx = statW/2;
+        String cls = d.getPredictedClass() != null ? d.getPredictedClass().toUpperCase() : "UNKNOWN";
+        drawCentred(g, cx, y+50, "CLASSIFICATION PREDICTION", COL_LABEL, boldFont(16));
+        drawCentred(g, cx, y+100, cls, classColor(d.getPredictedClass()), boldFont(32));
+        
+        String confStr = d.getConfidence() != null ? String.format("%.2f%%", d.getConfidence() * 100) : "N/A";
+        drawCentred(g, cx, y+150, "Model Confidence", COL_DISCLAIMER, boldFont(14));
+        drawCentred(g, cx, y+175, confStr, COL_VALUE, boldFont(22));
 
-        g.setColor(COL_BG_PANEL);
-        g.fillRect(0, y + 2, TOTAL_W, GRADCAM_H);
+        // Col 2
+        cx += statW;
+        String pxStr = d.getStoneAreaPixels() != null ? d.getStoneAreaPixels() + " px" : "N/A";
+        boolean detected = Boolean.TRUE.equals(d.getStoneDetected());
+        String detLabel = detected ? "STONE REGION DETECTED" : "NO STONE DETECTED";
+        
+        drawCentred(g, cx, y+50, "SEGMENTATION ANALYSIS", COL_LABEL, boldFont(16));
+        drawCentred(g, cx, y+100, detLabel, detected ? COL_WARN : COL_OK, boldFont(24));
+        
+        String covStr = d.getCoverageRatio() != null ? String.format("%.4f", d.getCoverageRatio()) : "N/A";
+        drawCentred(g, cx - 60, y+150, "Stone Area", COL_DISCLAIMER, boldFont(14));
+        drawCentred(g, cx - 60, y+175, pxStr, COL_VALUE, boldFont(20));
+        drawCentred(g, cx + 60, y+150, "Coverage Ratio", COL_DISCLAIMER, boldFont(14));
+        drawCentred(g, cx + 60, y+175, covStr, COL_VALUE, boldFont(20));
 
-        g.setColor(COL_ACCENT);
-        g.fillRect(0, y + 2, 5, GRADCAM_H);
+        // Col 3
+        cx += statW;
+        drawCentred(g, cx, y+50, "MODELS USED", COL_LABEL, boldFont(16));
+        
+        String clfModel = d.getClassificationModel() != null ? d.getClassificationModel() : "Unknown classification config";
+        drawCentred(g, cx, y+95, "Classification Model", COL_DISCLAIMER, boldFont(14));
+        drawCentred(g, cx, y+120, truncateStr(clfModel, 30), COL_VALUE, boldFont(18));
+        
+        String segModel = d.getSegmentationModel() != null ? d.getSegmentationModel() : "Unknown segmentation config";
+        drawCentred(g, cx, y+160, "Segmentation Model", COL_DISCLAIMER, boldFont(14));
+        drawCentred(g, cx, y+185, truncateStr(segModel, 30), COL_VALUE, boldFont(18));
 
-        g.setFont(boldFont(13));
-        g.setColor(COL_LABEL);
-        g.drawString("GRAD-CAM EXPLAINABILITY — Classification Heat Map", NUMERAL_PAD + 8, y + 28);
-
-        g.setFont(plainFont(11));
-        g.setColor(COL_DISCLAIMER);
-        String method = d.getXaiMethod() != null ? d.getXaiMethod() : "Grad-CAM";
-        g.drawString("Method: " + method + "  |  Highlights regions influencing the classification prediction.",
-                NUMERAL_PAD + 8, y + 44);
-
-        int imgY    = y + 54;
-        int imgH    = GRADCAM_H - 60;
-        int maxW    = TOTAL_W - NUMERAL_PAD * 2;
-
-        try {
-            BufferedImage gc = ImageIO.read(new ByteArrayInputStream(gradCamBytes));
-            if (gc != null) {
-                int[] dims = scaledDims(gc.getWidth(), gc.getHeight(), maxW, imgH);
-                int ix = NUMERAL_PAD + (maxW - dims[0]) / 2;
-                int iy = imgY + (imgH - dims[1]) / 2;
-                g.drawImage(gc, ix, iy, dims[0], dims[1], null);
-            }
-        } catch (IOException e) {
-            log.warn("Could not decode Grad-CAM image for comparison: {}", e.getMessage());
-            drawPlaceholderBox(g, NUMERAL_PAD, imgY, maxW, imgH, "Grad-CAM image could not be decoded");
-        }
-
-        return y + GRADCAM_H;
+        // Col 4
+        cx += statW;
+        drawCentred(g, cx, y+50, "PROCESSING INFORMATION", COL_LABEL, boldFont(16));
+        
+        String msTime = d.getProcessingTimeMs() != null ? d.getProcessingTimeMs() + " ms" : "N/A";
+        drawCentred(g, cx, y+95, "Processing Time", COL_DISCLAIMER, boldFont(14));
+        drawCentred(g, cx, y+120, msTime, COL_VALUE, boldFont(18));
+        
+        String device = d.getDevice() != null ? d.getDevice() : "N/A";
+        drawCentred(g, cx, y+160, "Device Engine", COL_DISCLAIMER, boldFont(14));
+        drawCentred(g, cx, y+185, device.toUpperCase(), COL_VALUE, boldFont(18));
+        
+        return y + STATS_H;
     }
 
     private void drawFooter(Graphics2D g, int y) {
+        g.setColor(COL_SEPARATOR);
+        g.fillRect(0, y, TOTAL_W, 2);
         g.setColor(COL_BG_HEADER);
-        g.fillRect(0, y, TOTAL_W, FOOTER_H);
-        g.setFont(plainFont(11));
+        g.fillRect(0, y+2, TOTAL_W, FOOTER_H);
+        g.setFont(boldFont(14));
         g.setColor(COL_DISCLAIMER);
-        String footer = "⚠  Clinical Decision Support Only — AI predictions require physician evaluation before clinical action.";
+        String footer = "\u26A0 Clinical Decision Support Disclaimer \u2014 AI predictions require physician evaluation before clinical action.";
         int fw = g.getFontMetrics().stringWidth(footer);
-        g.drawString(footer, (TOTAL_W - fw) / 2, y + 22);
+        g.drawString(footer, (TOTAL_W - fw) / 2, y + 32);
     }
-
-    // ── Drawing helpers ───────────────────────────────────────────────────────
 
     private void drawPanelBackground(Graphics2D g, int x, int y, int w, int h) {
         g.setColor(COL_BG_PANEL);
@@ -439,24 +323,15 @@ public class DiagnosisComparisonGenerator {
         g.drawRect(x, y, w - 1, h - 1);
     }
 
-    private void drawPanelLabel(Graphics2D g, int x, int y, String label, Color color) {
-        g.setColor(color.darker());
-        g.fillRect(x, y, PANEL_W, 28);
-        g.setFont(boldFont(12));
-        g.setColor(Color.WHITE);
-        g.drawString(label, x + NUMERAL_PAD, y + 18);
-    }
-
-    private void drawLabelValue(Graphics2D g, int cx, int y, String label, String value,
-                                 Color labelColor, Color valueColor) {
-        g.setFont(plainFont(12));
-        g.setColor(labelColor);
-        String full = label + ":  ";
-        int lw = g.getFontMetrics().stringWidth(full);
-        g.drawString(full, cx - lw, y);
-        g.setFont(boldFont(12));
-        g.setColor(valueColor);
-        g.drawString(value, cx, y);
+    private void drawPanelHeader(Graphics2D g, int x, int y, String label) {
+        g.setColor(COL_BG_DARK);
+        g.fillRect(x, y, PANEL_W, 40);
+        g.setColor(COL_BORDER);
+        g.drawLine(x, y + 40, x + PANEL_W, y + 40);
+        
+        g.setFont(boldFont(15));
+        g.setColor(COL_VALUE);
+        g.drawString(label, x + NUMERAL_PAD, y + 26);
     }
 
     private void drawCentred(Graphics2D g, int cx, int y, String text, Color color, Font font) {
@@ -470,9 +345,8 @@ public class DiagnosisComparisonGenerator {
         g.setFont(font);
         g.setColor(color);
         FontMetrics fm = g.getFontMetrics();
-        int lineH = fm.getHeight() + 2;
+        int lineH = fm.getHeight() + 4;
         for (String line : text.split("\n")) {
-            // Simple word-wrap
             String[] words = line.split(" ");
             StringBuilder current = new StringBuilder();
             int cy = y;
@@ -495,23 +369,29 @@ public class DiagnosisComparisonGenerator {
     }
 
     private void drawPlaceholderBox(Graphics2D g, int x, int y, int w, int h, String message) {
-        g.setColor(COL_SEPARATOR);
+        g.setColor(COL_BG_DARK);
         g.fillRect(x, y, w, h);
         g.setColor(COL_BORDER);
+        g.setStroke(new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0));
         g.drawRect(x, y, w, h);
-        g.setFont(plainFont(12));
+        g.setStroke(new BasicStroke(1)); // reset
+        
+        g.setFont(boldFont(16));
         g.setColor(COL_LABEL);
         int tw = g.getFontMetrics().stringWidth(message);
         g.drawString(message, x + (w - tw) / 2, y + h / 2);
     }
 
-    // ── Utilities ─────────────────────────────────────────────────────────────
+    private String truncateStr(String str, int maxLen) {
+        if (str == null || str.length() <= maxLen) return str;
+        return str.substring(0, maxLen - 3) + "...";
+    }
 
     private static Color classColor(String cls) {
         if (cls == null) return COL_LABEL;
         return switch (cls.toLowerCase()) {
             case "stone"  -> new Color(255, 140,  40);
-            case "tumor"  -> new Color(220,  50,  50);
+            case "tumor"  -> COL_ERROR;
             case "cyst"   -> new Color(140, 160, 255);
             case "normal" -> COL_OK;
             default       -> COL_LABEL;
@@ -523,7 +403,7 @@ public class DiagnosisComparisonGenerator {
         return switch (status.toUpperCase()) {
             case "CONSISTENT"            -> COL_OK;
             case "PARTIAL_DISAGREEMENT"  -> COL_WARN;
-            case "DISAGREEMENT"          -> new Color(220, 60, 60);
+            case "DISAGREEMENT"          -> COL_ERROR;
             default                      -> COL_LABEL;
         };
     }

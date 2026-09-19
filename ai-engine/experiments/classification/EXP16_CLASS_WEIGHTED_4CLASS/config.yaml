@@ -1,0 +1,81 @@
+# ════════════════════════════════════════════════════════════════════
+# EXP16_CLASS_WEIGHTED_4CLASS — Configuration
+# ════════════════════════════════════════════════════════════════════
+#
+# SCIENTIFIC QUESTION:
+#   Does moderate class-weighted CrossEntropyLoss improve Stone recall
+#   without causing extreme prediction bias observed in EXP13
+#   (WeightedRandomSampler)?
+#
+# INTENTIONAL CHANGES vs baseline:
+#   1. CrossEntropyLoss(weight=class_weights)
+#      using inverse-sqrt-frequency weighting, normalised so mean ≈ 1
+#
+# UNCHANGED: backbone, input size, preprocessing, augmentation, optim,
+#            scheduler, sampler (natural distribution), split, seed
+# ════════════════════════════════════════════════════════════════════
+
+experiment:
+  id: EXP16_CLASS_WEIGHTED_4CLASS
+  description: >
+    EfficientNet-B0, 4-class, with inverse-sqrt-frequency class weights
+    in CrossEntropyLoss. Tests moderate class balancing without sampler.
+  seed: 42
+  deterministic: true
+
+classes:
+  names: [Normal, Cyst, Stone, Tumor]
+  num_classes: 4
+  label_map:
+    Normal: 0
+    Cyst:   1
+    Stone:  2
+    Tumor:  3
+
+data:
+  train_csv: datasets/splits/classification/train.csv
+  val_csv:   datasets/splits/classification/val.csv
+  test_csv:  datasets/splits/classification/test.csv
+
+external:
+  root: "datasets/raw/classification/additional_dataset/Kidney Stone Dataset/Original"
+  expected_total: 3364
+  stone_label: 2
+  threshold: 0.5
+
+model:
+  backbone: efficientnet_b0    # UNCHANGED
+  pretrained: true
+  num_classes: 4
+  dropout: 0.3
+
+# ── Class weighting ───────────────────────────────────────────────
+class_weights:
+  enabled: true
+  method: inverse_sqrt_frequency
+  # weight_i ∝ 1 / sqrt(count_i), then normalised so mean(weights) == 1
+  # Calculated from training split labels only.
+  normalize: true    # ensure mean weight ≈ 1.0
+  note: >
+    Preferred over pure inverse-frequency to avoid over-compensating
+    the Stone class (as seen in EXP13 with WeightedRandomSampler).
+
+training:
+  intentional_changes:
+    - class_weighted_crossentropy_loss
+  optimizer: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  batch_size: 32
+  num_epochs: 50
+  scheduler: cosine_annealing
+  scheduler_T_max: 50
+  early_stopping_patience: 10
+  early_stopping_metric: val_macro_f1
+  input_size: 224
+  augmentation_strategy: baseline   # UNCHANGED
+
+output:
+  dir: ai-engine/experiments/classification/EXP16_CLASS_WEIGHTED_4CLASS/outputs
+  checkpoint_name: best_model_exp16_class_weighted.pth
+  latest_name: latest_checkpoint_exp16.pth

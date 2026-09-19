@@ -1,0 +1,77 @@
+# ════════════════════════════════════════════════════════════════════
+# EXP18_B2_320_CT_AUGMENTATION — Configuration
+# ════════════════════════════════════════════════════════════════════
+#
+# SCIENTIFIC QUESTION:
+#   Can CT-specific spatial and intensity augmentations (e.g. slight
+#   rotations, gamma shifts, pseudo-CT windowing) improve generalization
+#   for the EfficientNet-B2 (320x320) backbone without distorting anatomy?
+#
+# IMPORTANT:
+#   Trains freshly from ImageNet weights. NOT finetuned from EXP15.
+# ════════════════════════════════════════════════════════════════════
+
+experiment:
+  id: EXP18_B2_320_CT_AUGMENTATION
+  description: EfficientNet-B2 at 320x320 with CT-safe augmentations.
+  seed: 42
+  deterministic: true
+
+classes:
+  names: [Normal, Cyst, Stone, Tumor]
+  num_classes: 4
+  label_map: {Normal: 0, Cyst: 1, Stone: 2, Tumor: 3}
+
+data:
+  train_csv: datasets/splits/classification/train.csv
+  val_csv:   datasets/splits/classification/val.csv
+  test_csv:  datasets/splits/classification/test.csv
+
+external:
+  root: "datasets/raw/classification/additional_dataset/Kidney Stone Dataset/Original"
+  expected_total: 3364
+  stone_label: 2
+  threshold: 0.5  # Fixed threshold. (Optimised threshold is purely EXP17 domain)
+
+model:
+  backbone: efficientnet_b2
+  pretrained: true
+  num_classes: 4
+  dropout: 0.3
+
+# ── CT-Specific Augmentation Rules ────────────────────────
+augmentation:
+  # Spatial
+  rotation_degrees: 7
+  translate: 0.05       # 5% shift max (kidney anatomy preserved)
+  scale_range: [0.95, 1.05]
+  horizontal_flip_p: 0.5
+  vertical_flip_p: 0.0  # UNSAFE for abdominal CT, forces realistic view
+  
+  # Intensity
+  brightness_jitter: 0.1
+  contrast_jitter: 0.2
+  gamma_range: [0.85, 1.15]
+  
+  # CT Pseudo-Window Simulation (random stretch of intensity ranges)
+  # Operates at pixel level prior to ImageNet normalization
+  intensity_window_prob: 0.5
+  intensity_shift_range: [-0.05, 0.05]
+  intensity_scale_range: [0.9, 1.1]
+
+training:
+  optimizer: adamw
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  batch_size: 8         # Matches EXP15 (conservative safety limit)
+  num_epochs: 50
+  scheduler: cosine_annealing
+  scheduler_T_max: 50
+  early_stopping_patience: 10
+  early_stopping_metric: val_macro_f1
+  input_size: 320
+
+output:
+  dir: ai-engine/experiments/classification/EXP18_B2_320_CT_AUGMENTATION/outputs
+  checkpoint_name: best_model_exp18_b2_320_ct_aug.pth
+  latest_name: latest_checkpoint_exp18.pth

@@ -63,6 +63,8 @@ class SegmentationResult(BaseModel):
     coverageRatio: float = Field(..., ge=0.0, le=1.0)
     numComponents: Optional[int] = None
     boundingBox: Optional[BoundingBox] = None
+    maskPath: Optional[str] = None
+    overlayPath: Optional[str] = None
 
 
 class ExplainabilityResult(BaseModel):

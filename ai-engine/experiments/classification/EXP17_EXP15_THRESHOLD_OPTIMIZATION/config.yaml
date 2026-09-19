@@ -1,0 +1,48 @@
+# ════════════════════════════════════════════════════════════════════
+# EXP17_EXP15_THRESHOLD_OPTIMIZATION — Configuration
+# ════════════════════════════════════════════════════════════════════
+#
+# SCIENTIFIC QUESTION:
+#   Can locating a better decision threshold for Stone vs Non-Stone
+#   using the internal validation set improve the operational
+#   precision/specificity of the EXP15 EfficientNet-B2 model?
+#
+# IMPORTANT:
+#   This experiment performs NO TRAINING.
+#   It loads the EXP15 checkpoint in read-only EVAL mode.
+#   External data is NEVER used for threshold selection.
+# ════════════════════════════════════════════════════════════════════
+
+experiment:
+  id: EXP17_EXP15_THRESHOLD_OPTIMIZATION
+  description: >
+    Evaluates probability thresholds using the internal validation split
+    and applies the selected threshold to the external evaluation.
+  source_experiment: EXP15_EFFICIENTNET_B2_320
+  source_checkpoint: ai-engine/experiments/classification/EXP15_EFFICIENTNET_B2_320/outputs/checkpoints/best_model_exp15_b2_320.pth
+
+# ── Data & Classes ──────────────────────────────────────────
+data:
+  val_csv: datasets/splits/classification/val.csv
+  input_size: 320    # Must match EXP15
+
+external:
+  root: "datasets/raw/classification/additional_dataset/Kidney Stone Dataset/Original"
+  expected_total: 3364
+  stone_label: 2
+
+# ── Threshold Optimization Parameters ──────────────────────
+threshold_search:
+  # Search range: from "start" to "end" by "step"
+  start: 0.10
+  end: 0.90
+  step: 0.02
+  
+  # Selection metric to find best operating point.
+  # Options: max_f1, max_youden_j, max_balanced_accuracy
+  selection_method: max_f1
+  minimum_specificity: null  # Optional constraint
+
+# ── Output Configuration ────────────────────────────────────
+output:
+  dir: ai-engine/experiments/classification/EXP17_EXP15_THRESHOLD_OPTIMIZATION/outputs

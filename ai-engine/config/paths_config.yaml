@@ -23,7 +23,8 @@ splits:
 
 # ── Weights ──────────────────────────────────────────────
 weights:
-  classification_best: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/classification/final_candidate_exp02a.pth"
+  # classification_best: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/classification/final_candidate_exp02a.pth"
+  classification_best: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/classification/best_model_exp15_b2_320.pth"
   classification_latest: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/classification/latest_checkpoint.pth"
   segmentation_best: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/segmentation/FINAL_SEGMENTATION_MODEL.pth"
   segmentation_latest: "${KIDNEY_AI_MODEL_ROOT:./ai-engine/weights}/segmentation/latest_checkpoint.pth"

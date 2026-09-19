@@ -1,0 +1,61 @@
+experiment:
+  id: EXP19_CROSS_DATASET_BINARY
+  description: "Cross-dataset generalization of a binary kidney-stone classifier."
+
+dataset:
+    name: "Kidney Stone Dataset"
+    root: "datasets/raw/classification/additional_dataset/Kidney Stone Dataset/Original"
+    class_mapping:
+      Stone: "STONE"
+      Non-Stone: "NON_STONE"
+    manifest: "ai-engine/experiments/classification/EXP19_CROSS_DATASET_BINARY/outputs/reports/exp19_split_manifest.csv"
+
+external_test:
+    name: "CT-Kidney"
+    root: "datasets/raw/classification/ct-kidney"
+    class_mapping:
+      Stone: "STONE"
+      Normal: "NON_STONE"
+    training_allowed: false
+    tuning_allowed: false
+    threshold_tuning_allowed: false
+
+split:
+    train: 0.70
+    validation: 0.15
+    test: 0.15
+    seed: 42
+
+model:
+    name: "efficientnet_b0"
+    pretrained: true
+    num_classes: 2
+    input_size: 224
+
+training:
+    batch_size: 32
+    epochs: 50
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    patience: 10
+
+augmentation:
+    enabled: true
+    rotation: 5
+    translation: 0.05
+    scale: [0.95, 1.05]
+    horizontal_flip: 0.5
+    brightness: 0.1
+    contrast: 0.1
+
+loss:
+    type: "CrossEntropyLoss"
+    class_weights: false
+
+hardware:
+    device: "cuda"
+
+output:
+    dir: "ai-engine/experiments/classification/EXP19_CROSS_DATASET_BINARY/outputs"
+    best_checkpoint: "best_model_exp19_binary.pth"
+    last_checkpoint: "last_model_exp19_binary.pth"

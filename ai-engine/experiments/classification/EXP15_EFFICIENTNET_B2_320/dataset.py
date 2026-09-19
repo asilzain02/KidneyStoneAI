@@ -1,0 +1,55 @@
+"""
+dataset.py — EXP15 standard 4-class CT dataset.
+Uses the project's existing split CSVs (read-only).
+Uses the baseline single-image representation (NOT multi-view).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Callable, List, Optional, Tuple
+
+import pandas as pd
+import torch
+from PIL import Image
+from torch.utils.data import Dataset
+
+CLASS_NAMES  = ["Normal", "Cyst", "Stone", "Tumor"]
+CLASS_TO_IDX = {c: i for i, c in enumerate(CLASS_NAMES)}
+
+
+class CTKidneyDataset15(Dataset):
+    """
+    4-class CT kidney dataset for EXP15.
+    Same as baseline; uses project split CSVs unmodified.
+    """
+
+    def __init__(
+        self,
+        csv_path: str | Path,
+        transform: Optional[Callable] = None,
+        smoke: bool = False,
+        smoke_n: int = 10,
+    ):
+        self.transform = transform
+        df = pd.read_csv(csv_path, encoding="utf-8")
+        df = df[df["class_name"].isin(CLASS_NAMES)].reset_index(drop=True)
+        if smoke:
+            df = (df.groupby("class_name", group_keys=False)
+                    .apply(lambda g: g.head(smoke_n))
+                    .reset_index(drop=True))
+        self.image_paths: List[str] = df["image_path"].tolist()
+        self.labels: List[int] = [CLASS_TO_IDX[c] for c in df["class_name"]]
+        self._counts = df["class_name"].value_counts().to_dict()
+
+    def __len__(self) -> int:
+        return len(self.image_paths)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+        img = Image.open(self.image_paths[idx]).convert("RGB")
+        if self.transform:
+            img = self.transform(img)
+        return img, self.labels[idx]
+
+    def class_counts(self) -> dict:
+        return {c: self._counts.get(c, 0) for c in CLASS_NAMES}

@@ -170,6 +170,7 @@ ai-engine/weights/**/*.ckpt
 /mvn.log
 /walkthrough_experiments.md
 /implementation_plan_segmentation
+*.txt
 
 
 # ─── ZIP FILES ────────────────────

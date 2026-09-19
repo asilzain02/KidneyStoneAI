@@ -240,6 +240,8 @@ def _build_response(
         coverageRatio=float(coverage),
         numComponents=seg_stats.get("num_components"),
         boundingBox=bbox,
+        maskPath=seg_raw.get("saved_files", {}).get("maskPath"),
+        overlayPath=seg_raw.get("saved_files", {}).get("overlayPath"),
     )
 
     # ── Explainability ────────────────────────────────────────────────────────

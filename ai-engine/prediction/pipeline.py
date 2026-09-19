@@ -73,11 +73,20 @@ class PredictionPipeline:
         self.class_names = cfg["classification"].get("class_names", CLASS_NAMES)
 
         # Classification model
-        self._clf_model = build_classifier(cfg)
-        ckpt = torch.load(clf_checkpoint, map_location=self.device)
-        self._clf_model.load_state_dict(ckpt["model_state_dict"])
-        self._clf_model.to(self.device).eval()
-        log.info("Classifier loaded", checkpoint=str(clf_checkpoint))
+        from models.loader import load_model_safely
+        
+        self._clf_model, input_size, backbone_name = load_model_safely(
+            checkpoint_path=clf_checkpoint,
+            device=self.device,
+            expected_num_classes=len(self.class_names)
+        )
+        
+        log.info(
+            "Classifier dynamically loaded", 
+            checkpoint=str(clf_checkpoint), 
+            architecture=backbone_name, 
+            input_size=input_size
+        )
 
         # Segmentation model (optional)
         self._seg_infer = None
@@ -93,7 +102,7 @@ class PredictionPipeline:
 
         # Classification transform (val/test — no augmentation)
         self._clf_transform = get_classification_transforms(
-            "test", cfg["classification"]["input_size"]
+            "test", input_size
         )
 
         # Mask postprocessor
@@ -125,8 +134,9 @@ class PredictionPipeline:
         if self._seg_infer is None:
             raise RuntimeError("No segmentation model loaded.")
         result = self._seg_infer.predict(image, self.threshold)
-        _, stats = self._mask_proc.process(result["prob_mask"])
+        cleaned_mask, stats = self._mask_proc.process(result["prob_mask"])
         result["mask_statistics"] = stats
+        result["binary_mask_cleaned"] = cleaned_mask
         return result
 
     def gradcam(self, image: Image.Image, stem: str = "result") -> Dict:
@@ -169,13 +179,44 @@ class PredictionPipeline:
         if run_segmentation and (is_stone or self._seg_infer is not None):
             if self._seg_infer is not None:
                 seg_result = self.segment(image)
+                
+                # --- VISUALIZATION GENERATION ---
+                cleaned_mask = seg_result["binary_mask_cleaned"] # [H, W] uint8 (0 or 1)
+                img_rgba = image.convert("RGBA")
+                w, h = img_rgba.size
+                
+                import cv2
+                mask_resized = cv2.resize(cleaned_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+                
+                overlay_arr = np.zeros((h, w, 4), dtype=np.uint8)
+                overlay_arr[mask_resized > 0] = [255, 0, 0, 100] # Transparent Red Mask
+                
+                overlay_img = Image.fromarray(overlay_arr, mode="RGBA")
+                composited = Image.alpha_composite(img_rgba, overlay_img).convert("RGB")
+                
+                mask_img = Image.fromarray((mask_resized * 255).astype(np.uint8), mode="L")
+                
+                mask_name = f"{stem}_seg_mask.png"
+                overlay_name = f"{stem}_seg_overlay.png"
+                
+                out_dir = Path(self.gradcam_output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                
+                mask_img.save(out_dir / mask_name)
+                composited.save(out_dir / overlay_name)
+                
                 output["segmentation"] = {
                     "stone_area_pixels": seg_result["stone_area_pixels"],
                     "mask_statistics": seg_result.get("mask_statistics", {}),
+                    "saved_files": {
+                        "maskPath": mask_name,
+                        "overlayPath": overlay_name
+                    }
                 }
                 log.info(
-                    "Segmentation",
+                    "Segmentation generated",
                     stone_pixels=seg_result["stone_area_pixels"],
+                    overlay=overlay_name
                 )
             else:
                 output["segmentation"] = {
