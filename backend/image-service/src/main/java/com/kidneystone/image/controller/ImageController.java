@@ -40,7 +40,7 @@ public class ImageController {
     // POST /api/v1/images/upload/{patientId}
     @PostMapping(value = "/upload/{patientId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Upload a medical image for a patient")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<ImageResponse>> upload(
             @PathVariable UUID patientId,
             @RequestParam("file") MultipartFile file,
@@ -114,7 +114,7 @@ public class ImageController {
     // DELETE /api/v1/images/{id}
     @DeleteMapping("/{id}")
     @Operation(summary = "Soft-delete an image")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         imageService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null, "Image deleted"));

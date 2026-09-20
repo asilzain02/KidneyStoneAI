@@ -8,6 +8,7 @@ import lombok.Data;
 public class ReportRequest {
     private String patientId;
     private String imageId;
+    private String diagnosisId;
     
     // AI Output
     private String predictedClass;

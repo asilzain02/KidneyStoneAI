@@ -9,6 +9,8 @@ import { Card, CardContent } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { formatApiDate } from '@/utils/dateUtils';
 import AddPatientModal from '@/features/patients/components/AddPatientModal';
+import { authApi } from '@/features/auth/api/authApi';
+import { getPermissions } from '@/features/auth/utils/permissions';
 
 export default function CTImages() {
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -20,6 +22,13 @@ export default function CTImages() {
     queryKey: ['patients'],
     queryFn: patientApi.getPatients,
   });
+
+  const { data: user } = useQuery({
+    queryKey: ['profile'],
+    queryFn: authApi.getProfile,
+  });
+
+  const permissions = getPermissions(user?.role);
 
   const uploadMutation = useMutation({
     mutationFn: () => {
@@ -62,10 +71,15 @@ export default function CTImages() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Upload CT Image</h1>
-        <p className="text-sm text-slate-500 mt-1">Upload patient CT scan for AI analysis.</p>
+        <h1 className="text-2xl font-bold text-slate-800">CT Images</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          {permissions.uploadImages 
+            ? 'Upload and manage patient CT scans for AI analysis.' 
+            : 'View existing patient CT scans.'}
+        </p>
       </div>
 
+      {permissions.uploadImages && (
       <Card>
         <CardContent className="p-8 space-y-8">
           <div>
@@ -154,6 +168,7 @@ export default function CTImages() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {selectedPatientId && (
         <Card>

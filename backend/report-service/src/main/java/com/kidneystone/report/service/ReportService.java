@@ -64,10 +64,19 @@ public class ReportService {
         sb.append("Treatment / Clinical Guidance\n");
         sb.append("Recommendation: ").append(request.getTreatmentRecommendation() != null ? request.getTreatmentRecommendation() : "N/A").append("\n\n");
         
-        sb.append("Explainability\n");
+        sb.append("Explainability & Visual Artifacts\n");
         if (request.getXaiMethod() != null) {
             sb.append("Method: ").append(request.getXaiMethod()).append("\n");
-            sb.append("Visual Data Available. Use Heatmap/Overlay URLs provided in the response metadata.\n\n");
+            sb.append("To view the corroborating visual evidence, access the following secured clinical endpoints via the API Gateway (localhost:8080):\n\n");
+            
+            sb.append("[1] Original CT Scanner Object:\n");
+            sb.append("    GET http://localhost:8080/api/v1/images/download/").append(request.getImageId()).append("\n\n");
+            
+            sb.append("[2] AI Segmentation Mask:\n");
+            sb.append("    GET http://localhost:8080/api/v1/diagnoses/").append(request.getDiagnosisId()).append("/segmentation\n\n");
+            
+            sb.append("[3] Grad-CAM Classification Heatmap:\n");
+            sb.append("    GET http://localhost:8080/api/v1/diagnoses/").append(request.getDiagnosisId()).append("/gradcam\n\n");
         } else {
             sb.append("No Grad-CAM / explanation information available.\n\n");
         }
@@ -77,5 +86,35 @@ public class ReportService {
         sb.append("------------------------------------------------\n");
         
         return new ReportResponse(sb.toString());
+    }
+
+    public ReportRequest generateReportRequest(String diagnosisId, String authHeader) {
+        Map<String, Object> diagnosis = diagnosisServiceClient.getDiagnosisById(diagnosisId, authHeader);
+        if (diagnosis == null) {
+            throw new IllegalArgumentException("Diagnosis not found");
+        }
+        
+        ReportRequest req = new ReportRequest();
+        req.setDiagnosisId(diagnosisId);
+        
+        req.setPatientId(diagnosis.get("patientId") != null ? diagnosis.get("patientId").toString() : null);
+        req.setImageId(diagnosis.get("imageId") != null ? diagnosis.get("imageId").toString() : null);
+        req.setPredictedClass(diagnosis.get("predictedClass") != null ? diagnosis.get("predictedClass").toString() : null);
+        req.setSeverityLevel(diagnosis.get("severityLevel") != null ? diagnosis.get("severityLevel").toString() : null);
+        req.setSeverityReason(diagnosis.get("severityReason") != null ? diagnosis.get("severityReason").toString() : null);
+        req.setTreatmentCategory(diagnosis.get("treatmentCategory") != null ? diagnosis.get("treatmentCategory").toString() : null);
+        req.setTreatmentRecommendation(diagnosis.get("treatmentRecommendation") != null ? diagnosis.get("treatmentRecommendation").toString() : null);
+        req.setXaiMethod(diagnosis.get("xaiMethod") != null ? diagnosis.get("xaiMethod").toString() : null);
+        
+        if (diagnosis.get("confidence") != null) {
+            req.setConfidence(Double.parseDouble(diagnosis.get("confidence").toString()));
+        }
+        if (diagnosis.get("stoneDetected") != null) {
+            req.setStoneDetected(Boolean.parseBoolean(diagnosis.get("stoneDetected").toString()));
+        }
+        // Timestamp is converted to LocalDateTime if possible in ReportRequest, 
+        // wait, earlier I checked and ReportRequest timestamp is LocalDateTime. 
+        // If we can't parse it well manually, just leave it null and let PdfGen handle it gracefully.
+        return req;
     }
 }

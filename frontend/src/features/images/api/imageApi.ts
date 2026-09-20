@@ -29,5 +29,10 @@ export const imageApi = {
 
   getImage: async (id: string): Promise<ImageResponse> => {
     return apiClient.get(`/images/${id}`);
+  },
+
+  downloadImage: async (id: string): Promise<Blob> => {
+    const response = await apiClient.get<Blob>(`/images/download/${id}`, { responseType: 'blob' });
+    return response.data || response;
   }
 };

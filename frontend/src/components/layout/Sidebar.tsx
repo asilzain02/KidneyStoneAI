@@ -2,12 +2,13 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users as UsersIcon, Image as ImageIcon, Activity, FileText, Settings, LogOut, Shield } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { authApi } from '@/features/auth/api/authApi';
+import { getPermissions } from '@/features/auth/utils/permissions';
 import { cn } from '@/utils/cn';
 
-const navigationItems = [
+const allNavItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Patients', path: '/patients', icon: UsersIcon },
-  { label: 'CT Images', path: '/images', icon: ImageIcon },
+  { label: 'CT Images', path: '/images', icon: ImageIcon, requirePermission: 'uploadImages' as const },
   { label: 'Diagnoses', path: '/diagnoses', icon: Activity },
   { label: 'Reports', path: '/reports', icon: FileText },
 ];
@@ -18,7 +19,11 @@ export default function Sidebar() {
     queryFn: authApi.getProfile,
   });
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'ROLE_ADMIN';
+  const permissions = getPermissions(user?.role);
+  
+  const visibleNavItems = allNavItems.filter(item => 
+    !item.requirePermission || permissions[item.requirePermission]
+  );
 
   return (
     <div className="flex h-full w-64 flex-col bg-brand-900 text-white">
@@ -27,7 +32,7 @@ export default function Sidebar() {
       </div>
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="space-y-1 px-3">
-          {navigationItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
@@ -48,7 +53,7 @@ export default function Sidebar() {
       </div>
       <div className="border-t border-brand-800 p-4">
         <nav className="space-y-1">
-          {isAdmin && (
+          {permissions.manageUsers && (
             <NavLink
               to="/users"
               className={({ isActive }) =>

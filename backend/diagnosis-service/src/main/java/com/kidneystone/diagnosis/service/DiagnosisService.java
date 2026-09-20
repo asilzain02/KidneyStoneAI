@@ -284,6 +284,7 @@ public class DiagnosisService {
         ReportRequest req = ReportRequest.builder()
                 .patientId(diagnosis.getPatientId() != null ? diagnosis.getPatientId().toString() : null)
                 .imageId(diagnosis.getImageId() != null ? diagnosis.getImageId().toString() : null)
+                .diagnosisId(diagnosisId.toString())
                 .predictedClass(diagnosis.getPredictedClass())
                 .confidence(diagnosis.getConfidence())
                 .stoneDetected(diagnosis.getStoneDetected())

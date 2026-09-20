@@ -66,4 +66,22 @@ public class DiagnosisServiceClient {
             throw new RuntimeException("Diagnosis Service unavailable or failed", e);
         }
     }
+
+    public Map<String, Object> getDiagnosisById(String diagnosisId, String authHeader) {
+        String url = baseUrl.stripTrailing() + "/api/v1/diagnoses/" + diagnosisId;
+        HttpHeaders headers = new HttpHeaders();
+        if (authHeader != null) {
+            headers.set(HttpHeaders.AUTHORIZATION, authHeader);
+        }
+        HttpEntity<?> entity = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, Map.class);
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("Failed to fetch diagnosis {} from Diagnosis Service: {}", diagnosisId, e.getMessage());
+            throw new RuntimeException("Failed to fetch diagnosis details", e);
+        }
+    }
 }

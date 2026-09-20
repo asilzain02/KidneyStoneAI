@@ -220,7 +220,6 @@ function CreateUserForm({ onCancel }: { onCancel: () => void }) {
               >
                 <option value="DOCTOR">DOCTOR</option>
                 <option value="ADMIN">ADMIN</option>
-                <option value="PATIENT">PATIENT</option>
               </select>
             </div>
           </div>

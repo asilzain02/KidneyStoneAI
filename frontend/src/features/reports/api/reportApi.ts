@@ -10,8 +10,8 @@ export const reportApi = {
     return [];
   },
 
-  getReport: async (id: string): Promise<ReportResponse> => {
-    const response = await apiClient.get<ReportResponse>(`/diagnoses/${id}/report`);
+  getReportDetail: async (diagnosisId: string): Promise<ReportResponse> => {
+    const response = await apiClient.get<ReportResponse>(`/diagnoses/${diagnosisId}`);
     return response as unknown as ReportResponse;
   },
 
@@ -20,11 +20,8 @@ export const reportApi = {
     return response as unknown as ReportResponse;
   },
   
-  downloadReport: async (id: string): Promise<Blob> => {
-    // Because this returns a blob (e.g. PDF), we might not want it unwrapped as JSON {status, data}.
-    // If the java backend returns raw byte[], this needs standard axios bypass.
-    // The architecture returns JSON from /diagnoses/{id}/report, but UI expects a download.
-    const response = await apiClient.get(`/diagnoses/${id}/report`, { responseType: 'blob' });
+  getReportPdf: async (diagnosisId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/reports/${diagnosisId}/pdf`, { responseType: 'blob' });
     return response as unknown as Blob;
   }
 };

@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/common/Ca
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { formatApiDate } from '@/utils/dateUtils';
-import { getArtifactUrl } from '@/services/artifacts/artifactUrl';
+
 import { CreateDiagnosisRequest, DiagnosisResponse } from '../types';
 
 export default function DiagnosisList() {
@@ -137,9 +137,9 @@ export default function DiagnosisList() {
 }
 
 function DiagnosisResultSection({ diagnosis, patient }: { diagnosis: DiagnosisResponse; patient?: any }) {
-  const { data: ctImage } = useQuery({
-    queryKey: ['image', diagnosis.imageId],
-    queryFn: () => imageApi.getImage(diagnosis.imageId),
+  const { data: ctBlob } = useQuery({
+    queryKey: ['originalImage', diagnosis.imageId],
+    queryFn: () => imageApi.downloadImage(diagnosis.imageId),
     enabled: !!diagnosis.imageId,
   });
 
@@ -155,6 +155,11 @@ function DiagnosisResultSection({ diagnosis, patient }: { diagnosis: DiagnosisRe
     enabled: !!diagnosis.id && diagnosis.status === 'COMPLETED',
   });
 
+  const ctUrl = useMemo(() => {
+    if (!ctBlob || ctBlob.size === 0) return null;
+    return URL.createObjectURL(ctBlob as Blob);
+  }, [ctBlob]);
+
   const segUrl = useMemo(() => {
     if (!segBlob || segBlob.size === 0) return null;
     return URL.createObjectURL(segBlob as Blob);
@@ -167,10 +172,11 @@ function DiagnosisResultSection({ diagnosis, patient }: { diagnosis: DiagnosisRe
 
   useEffect(() => {
     return () => {
+      if (ctUrl) URL.revokeObjectURL(ctUrl);
       if (segUrl) URL.revokeObjectURL(segUrl);
       if (gradCamUrl) URL.revokeObjectURL(gradCamUrl);
     };
-  }, [segUrl, gradCamUrl]);
+  }, [ctUrl, segUrl, gradCamUrl]);
 
   return (
     <div className="space-y-6 mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -192,8 +198,8 @@ function DiagnosisResultSection({ diagnosis, patient }: { diagnosis: DiagnosisRe
             <CardTitle className="text-sm font-semibold text-slate-700">ORIGINAL CT IMAGE</CardTitle>
           </CardHeader>
           <CardContent className="p-0 flex-1 bg-black flex items-center justify-center min-h-[300px]">
-            {ctImage?.url ? (
-              <img src={getArtifactUrl(ctImage.url)} alt="Original CT Scanner" className="max-w-full max-h-[350px] object-contain" />
+            {ctUrl ? (
+              <img src={ctUrl} alt="Original CT Scanner" className="max-w-full max-h-[350px] object-contain" />
             ) : (
               <span className="text-slate-500 text-sm">Image unavailable</span>
             )}
