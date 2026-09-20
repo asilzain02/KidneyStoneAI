@@ -45,11 +45,13 @@ public class ImageController {
             @PathVariable UUID patientId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "modality", required = false) String modality,
+            @RequestParam(value = "fileName", required = false) String fileName,
             Principal principal) {
 
         UUID uploadedBy = UUID.fromString(principal.getName());
         ImageUploadRequest request = new ImageUploadRequest();
         request.setModality(modality);
+        request.setFileName(fileName);
 
         ImageResponse response = imageService.upload(patientId, file, request, uploadedBy);
         return ResponseEntity.status(HttpStatus.CREATED)

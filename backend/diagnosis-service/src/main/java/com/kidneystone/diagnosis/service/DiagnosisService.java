@@ -92,23 +92,18 @@ public class DiagnosisService {
             UUID requestedBy,
             String authHeader
     ) {
-        log.info("Starting AI diagnosis: imageId={}, patientId={}, requestedBy={}",
-                imageId, patientId, requestedBy);
+        log.info("[DIAGNOSIS] request received imageId={}, patientId={}, requestedBy={}", imageId, patientId, requestedBy);
 
         // ── 0. Fetch image from Image Service ──────────────────────────────
         DownloadedImage image;
         try {
             image = imageServiceClient.downloadImage(imageId, authHeader);
         } catch (Exception e) {
-            log.error("Failed to retrieve image for diagnosis: {}", e.getMessage());
+            log.error("[DIAGNOSIS-ERROR] stage=IMAGE_FETCH exception={} message={}", e.getClass().getSimpleName(), e.getMessage());
             throw new AiEngineException("Failed to retrieve image from Image Service. Ensure the image exists.");
         }
 
         // ── 1. Create pending diagnosis record ─────────────────────────────
-        // Purpose:
-        // Save a PENDING record before calling the AI Engine so that if the
-        // service crashes mid-inference, there is an audit trail showing
-        // that a diagnosis was attempted.
         Diagnosis diagnosis = new Diagnosis();
         diagnosis.setImageId(imageId);
         diagnosis.setPatientId(patientId);
@@ -116,29 +111,40 @@ public class DiagnosisService {
         diagnosis.setStatus("PENDING");
         diagnosis = diagnosisRepository.save(diagnosis);
 
-        log.info("Diagnosis record created: id={}", diagnosis.getId());
+        log.info("[DIAGNOSIS-PERSIST] saving diagnosis PENDING id={}", diagnosis.getId());
 
         // ── 2. Call AI Engine ──────────────────────────────────────────────
         AiAnalysisResult aiResult;
         try {
+            log.info("[AI-CALL] sending inference to AI engine");
             aiResult = aiEngineClient.analyze(image.getBytes(), image.getFilename(), image.getContentType());
+            log.info("[AI-CALL] response status = SUCCESS");
         } catch (AiEngineException e) {
-            // Purpose:
-            // Mark the diagnosis as FAILED — do not silently swallow the error.
+            log.error("[DIAGNOSIS-ERROR] stage=AI_INFERENCE exception={} message={}", e.getClass().getSimpleName(), e.getMessage());
             diagnosis.setStatus("FAILED");
             diagnosis.setErrorMessage(truncate(e.getMessage(), 1000));
             diagnosisRepository.save(diagnosis);
-
-            log.error("AI Engine call failed: diagnosisId={}, error={}",
-                    diagnosis.getId(), e.getMessage());
             throw e;
+        } catch (Exception e) {
+            log.error("[DIAGNOSIS-ERROR] stage=AI_INFERENCE exception={} message={}", e.getClass().getSimpleName(), e.getMessage());
+            diagnosis.setStatus("FAILED");
+            diagnosis.setErrorMessage(truncate(e.getMessage(), 1000));
+            diagnosisRepository.save(diagnosis);
+            throw new AiEngineException("Unexpected error calling AI Engine: " + e.getMessage(), e);
         }
+
+        log.info("[AI-RESULT] inferenceId={}", aiResult.getInferenceId());
+        log.info("[AI-RESULT] prediction={}",
+                aiResult.getClassification() != null ? aiResult.getClassification().getPredictedClass() : "null");
+        log.info("[AI-RESULT] confidence={}",
+                aiResult.getClassification() != null ? aiResult.getClassification().getConfidence() : "null");
 
         // ── 3. Persist AI result columns ───────────────────────────────────
         diagnosisMapper.applyAiResult(aiResult, diagnosis);
 
         // ── 4. Assess Severity ─────────────────────────────────────────────
         try {
+            log.info("[SEVERITY-CALL] starting");
             SeverityRequest sevReq = SeverityRequest.builder()
                     .predictedClass(diagnosis.getPredictedClass())
                     .confidence(diagnosis.getConfidence())
@@ -149,12 +155,14 @@ public class DiagnosisService {
             SeverityResponse sevResp = severityServiceClient.assessSeverity(sevReq, authHeader);
             diagnosis.setSeverityLevel(sevResp.getSeverityLevel());
             diagnosis.setSeverityReason(sevResp.getSeverityReason());
+            log.info("[SEVERITY-CALL] status=SUCCESS");
         } catch (Exception e) {
-            log.warn("Severity assessment failed. Continuing without severity data: {}", e.getMessage());
+            log.error("[DIAGNOSIS-ERROR] stage=SEVERITY exception={} message={}", e.getClass().getSimpleName(), e.getMessage());
         }
 
         // ── 5. Recommend Treatment ─────────────────────────────────────────
         try {
+            log.info("[TREATMENT-CALL] starting");
             TreatmentRequest treatReq = TreatmentRequest.builder()
                     .predictedClass(diagnosis.getPredictedClass())
                     .severityLevel(diagnosis.getSeverityLevel())
@@ -162,39 +170,30 @@ public class DiagnosisService {
             TreatmentResponse treatResp = treatmentServiceClient.recommendTreatment(treatReq, authHeader);
             diagnosis.setTreatmentCategory(treatResp.getTreatmentCategory());
             diagnosis.setTreatmentRecommendation(treatResp.getTreatmentRecommendation());
+            log.info("[TREATMENT-CALL] status=SUCCESS");
         } catch (Exception e) {
-            log.warn("Treatment recommendation failed. Continuing without treatment data: {}", e.getMessage());
+            log.error("[DIAGNOSIS-ERROR] stage=TREATMENT exception={} message={}", e.getClass().getSimpleName(), e.getMessage());
         }
 
         diagnosis.setStatus("COMPLETED");
 
-        // Purpose:
-        // Store the full JSON blob for audit and forward-compatibility.
-        // If we add new AI Engine fields later, they are captured here
-        // even before the entity schema is updated.
         try {
             diagnosis.setFullResultJson(objectMapper.writeValueAsString(aiResult));
         } catch (JsonProcessingException e) {
             log.warn("Could not serialise AI result to JSON blob: {}", e.getMessage());
-            // Non-fatal — columns still have the structured data.
         }
 
-        diagnosis = diagnosisRepository.save(diagnosis);
+        try {
+            log.info("[DIAGNOSIS-PERSIST] saving diagnosis COMPLETED");
+            diagnosis = diagnosisRepository.save(diagnosis);
+        } catch (Exception e) {
+            log.error("[DIAGNOSIS-ERROR] stage=PERSISTENCE exception={} message={}", e.getClass().getSimpleName(), e.getMessage());
+            throw e;
+        }
 
-        log.info(
-                "Diagnosis completed: id={}, inferenceId={}, class={}, confidence={}, processingMs={}",
-                diagnosis.getId(),
-                diagnosis.getInferenceId(),
-                diagnosis.getPredictedClass(),
-                diagnosis.getConfidence(),
-                diagnosis.getProcessingTimeMs()
-        );
+        log.info("[DIAGNOSIS-COMPLETE] diagnosisId={}", diagnosis.getId());
 
         // ── 6. Generate comparison image (non-fatal) ──────────────────────────────────
-        // Purpose:
-        // Attempt to generate the comparison PNG now so the first GET /comparison
-        // request can serve a cached file.  A failure here does NOT fail the
-        // diagnosis itself — the comparison can be generated lazily on first GET.
         try {
             byte[] gradCamBytes = null;
             if (diagnosis.getInferenceId() != null && diagnosis.getOverlayPath() != null) {
@@ -206,7 +205,6 @@ public class DiagnosisService {
                 String segFilename = diagnosis.getInferenceId() + "_seg_overlay.png";
                 segOverlayBytes = aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), segFilename);
             }
-            // Re-download CT bytes for compositing (already fetched above, but image is local variable)
             byte[] ctBytes = image.getBytes();
             comparisonGenerator.generateAndCache(diagnosis, ctBytes, gradCamBytes, segOverlayBytes);
             log.info("Comparison image pre-generated for diagnosisId={}", diagnosis.getId());
@@ -242,6 +240,19 @@ public class DiagnosisService {
     public Page<DiagnosisResponse> getDiagnosesByPatient(UUID patientId, Pageable pageable) {
         return diagnosisRepository
                 .findAllByPatientIdOrderByCreatedAtDesc(patientId, pageable)
+                .map(d -> diagnosisMapper.toResponse(d, aiEngineBaseUrl));
+    }
+
+    /**
+     * Purpose:
+     *   Return all diagnosis records globally, ordered by most recent first.
+     */
+    @Transactional(readOnly = true)
+    public Page<DiagnosisResponse> getAllDiagnoses(Pageable pageable) {
+        // We do not have a pre-defined method in repository for ordered findAll, but we can pass Sort in Pageable
+        // However, it's safer to add findAllByOrderByCreatedAtDesc to repository if needed,
+        // or just use repository.findAll(pageable) mapping if the controller supplies the Sort.
+        return diagnosisRepository.findAll(pageable)
                 .map(d -> diagnosisMapper.toResponse(d, aiEngineBaseUrl));
     }
 
@@ -370,6 +381,40 @@ public class DiagnosisService {
         } catch (java.io.IOException e) {
             log.error("Failed to generate comparison image: diagnosisId={}, error={}", diagnosisId, e.getMessage());
             throw new RuntimeException("Comparison image generation failed.", e);
+        }
+    }
+
+    /**
+     * Purpose: Fetch the raw segmentation overlay artifact directly from the AI Engine.
+     */
+    @Transactional(readOnly = true)
+    public byte[] getSegmentationImage(UUID diagnosisId) {
+        Diagnosis diagnosis = diagnosisRepository
+                .findById(diagnosisId)
+                .orElseThrow(() -> new IllegalArgumentException("Diagnosis not found"));
+        if (diagnosis.getInferenceId() == null) return null;
+        String segFilename = diagnosis.getInferenceId() + "_seg_overlay.png";
+        try {
+            return aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), segFilename);
+        } catch (Exception e) {
+            return null; // Fail gracefully
+        }
+    }
+
+    /**
+     * Purpose: Fetch the raw Grad-CAM artifact directly from the AI Engine.
+     */
+    @Transactional(readOnly = true)
+    public byte[] getGradCamImage(UUID diagnosisId) {
+        Diagnosis diagnosis = diagnosisRepository
+                .findById(diagnosisId)
+                .orElseThrow(() -> new IllegalArgumentException("Diagnosis not found"));
+        if (diagnosis.getInferenceId() == null || diagnosis.getOverlayPath() == null) return null;
+        String overlayFilename = extractFilename(diagnosis.getOverlayPath());
+        try {
+            return aiEngineFileClient.fetchFile(diagnosis.getInferenceId(), overlayFilename);
+        } catch (Exception e) {
+            return null; // Fail gracefully
         }
     }
 }

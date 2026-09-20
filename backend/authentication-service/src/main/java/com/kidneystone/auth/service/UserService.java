@@ -19,11 +19,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final com.kidneystone.auth.repository.RoleRepository roleRepository;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
-    public UserResponse getProfile(String email) {
-        User user = userRepository.findByEmailAndIsDeletedFalse(email)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+    public UserResponse getProfile(String emailOrUsername) {
+        User user = userRepository.findByEmailAndIsDeletedFalse(emailOrUsername)
+                .orElseGet(() -> userRepository.findByUsernameAndIsDeletedFalse(emailOrUsername)
+                        .orElseThrow(() -> new NotFoundException("User not found")));
         return userMapper.toDto(user);
     }
 
@@ -41,6 +44,32 @@ public class UserService {
                 .filter(u -> !u.isDeleted())
                 .orElseThrow(() -> new NotFoundException("User not found"));
         return userMapper.toDto(user);
+    }
+
+    @Transactional
+    public UserResponse createUser(com.kidneystone.auth.dto.RegisterRequest request) {
+        if (userRepository.existsByEmailAndIsDeletedFalse(request.getEmail())) {
+            throw new com.kidneystone.shared.exception.ValidationException("Email is already registered");
+        }
+        if (userRepository.existsByUsernameAndIsDeletedFalse(request.getUsername())) {
+             throw new com.kidneystone.shared.exception.ValidationException("Username is already taken");
+        }
+
+        com.kidneystone.auth.entity.Role role = roleRepository.findByNameAndIsDeletedFalse(request.getRole().toUpperCase())
+                .orElseThrow(() -> new com.kidneystone.shared.exception.ValidationException("Invalid role specified"));
+
+        User user = new User();
+        user.setEmail(request.getEmail());
+        user.setUsername(request.getUsername());
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setPhone(request.getPhone());
+        user.setRole(role);
+        user.setVerified(true);
+        user.setStatus("ACTIVE");
+
+        return userMapper.toDto(userRepository.save(user));
     }
 
     @Transactional

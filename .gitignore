@@ -171,6 +171,8 @@ ai-engine/weights/**/*.ckpt
 /walkthrough_experiments.md
 /implementation_plan_segmentation
 *.txt
+*.bat
+*.ps1
 
 
 # ─── ZIP FILES ────────────────────

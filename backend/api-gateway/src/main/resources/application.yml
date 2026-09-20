@@ -1,4 +1,4 @@
-﻿# application.yml — API Gateway
+# application.yml — API Gateway
 spring:
   application:
     name: api-gateway
@@ -20,7 +20,7 @@ spring:
         - id: diagnosis-service
           uri: ${DIAGNOSIS_SERVICE_URL:http://localhost:8084}
           predicates:
-            - Path=/api/v1/diagnosis/**
+            - Path=/api/v1/diagnoses/**
         - id: severity-service
           uri: ${SEVERITY_SERVICE_URL:http://localhost:8085}
           predicates:

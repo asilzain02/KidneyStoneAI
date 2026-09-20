@@ -35,6 +35,13 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id), "User retrieved"));
     }
 
+    @PostMapping
+    @Operation(summary = "Create a new user")
+    @PreAuthorize("hasAuthority('USER_WRITE') or hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(@jakarta.validation.Valid @RequestBody com.kidneystone.auth.dto.RegisterRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.createUser(request), "User created successfully"));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Soft delete user")
     @PreAuthorize("hasAuthority('USER_DELETE') or hasRole('ADMIN')")

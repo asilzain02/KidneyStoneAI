@@ -166,8 +166,23 @@ public class DiagnosisController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending());
         return ResponseEntity.ok(diagnosisService.getDiagnosesByPatient(patientId, pageable));
+    }
+
+    /**
+     * GET /api/v1/diagnoses
+     * Purpose: Paginated global diagnosis history.
+     */
+    @GetMapping
+    @Operation(summary = "List paginated diagnoses globally")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Page<DiagnosisResponse>> getAllDiagnoses(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending());
+        return ResponseEntity.ok(diagnosisService.getAllDiagnoses(pageable));
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
@@ -227,6 +242,30 @@ public class DiagnosisController {
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(errorBody("Comparison image generation failed."));
         }
+    }
+
+    /**
+     * GET /api/v1/diagnoses/{id}/segmentation
+     */
+    @GetMapping(value = "/{id}/segmentation", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "Get the individual segmentation artifact (PNG)")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getSegmentationImage(@PathVariable UUID id) {
+        byte[] img = diagnosisService.getSegmentationImage(id);
+        if (img == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(img);
+    }
+
+    /**
+     * GET /api/v1/diagnoses/{id}/gradcam
+     */
+    @GetMapping(value = "/{id}/gradcam", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "Get the individual Grad-CAM classification artifact (PNG)")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> getGradCamImage(@PathVariable UUID id) {
+        byte[] img = diagnosisService.getGradCamImage(id);
+        if (img == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).body(img);
     }
 
     /**

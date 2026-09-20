@@ -1,0 +1,62 @@
+{
+  "status": "SUCCESS",
+  "message": "Images retrieved",
+  "timestamp": "2026-09-21T00:07:56.3238358",
+  "data": {
+    "content": [
+      {
+        "id": "15fc092f-fb79-4980-91db-f969343fa327",
+        "patientId": "facabd69-0b80-436c-a250-45ad70b60f4d",
+        "fileName": "8a4f46ff-0371-48f1-99c0-40d7ff667392_Stone-__10_.jpg",
+        "originalFileName": "UI-TEST-STONE-10",
+        "storagePath": "facabd69-0b80-436c-a250-45ad70b60f4d/8a4f46ff-0371-48f1-99c0-40d7ff667392_Stone-__10_.jpg",
+        "fileSize": 82736,
+        "contentType": "image/jpeg",
+        "modality": "IMAGE",
+        "uploadDate": "2026-09-20T23:51:13.069251",
+        "status": "ACTIVE",
+        "createdAt": "2026-09-20T23:51:13.092248",
+        "updatedAt": "2026-09-20T23:51:13.092248",
+        "createdBy": null,
+        "updatedBy": null,
+        "version": 0
+      }
+    ],
+    "pageable": {
+      "pageNumber": 0,
+      "pageSize": 20,
+      "sort": [
+        {
+          "direction": "DESC",
+          "property": "uploadDate",
+          "ignoreCase": false,
+          "nullHandling": "NATIVE",
+          "ascending": false,
+          "descending": true
+        }
+      ],
+      "offset": 0,
+      "unpaged": false,
+      "paged": true
+    },
+    "last": true,
+    "totalPages": 1,
+    "totalElements": 1,
+    "size": 20,
+    "number": 0,
+    "sort": [
+      {
+        "direction": "DESC",
+        "property": "uploadDate",
+        "ignoreCase": false,
+        "nullHandling": "NATIVE",
+        "ascending": false,
+        "descending": true
+      }
+    ],
+    "first": true,
+    "numberOfElements": 1,
+    "empty": false
+  },
+  "error": null
+}

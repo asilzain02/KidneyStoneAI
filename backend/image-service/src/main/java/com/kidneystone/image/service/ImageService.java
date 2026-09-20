@@ -54,10 +54,13 @@ public class ImageService {
                 ? request.getModality().toUpperCase()
                 : fileValidator.detectModality(originalName);
 
+        String customFileName = (request != null && request.getFileName() != null && !request.getFileName().isBlank())
+                ? request.getFileName() : originalName;
+
         MedicalImage image = new MedicalImage();
         image.setPatientId(patientId);
         image.setFileName(storagePath.contains("/") ? storagePath.substring(storagePath.lastIndexOf('/') + 1) : storagePath);
-        image.setOriginalFileName(originalName);
+        image.setOriginalFileName(customFileName);
         image.setStoragePath(storagePath);
         image.setFileSize(file.getSize());
         image.setContentType(file.getContentType());

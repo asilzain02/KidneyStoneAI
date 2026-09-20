@@ -2,10 +2,37 @@ package com.kidneystone.report.service;
 
 import com.kidneystone.report.dto.ReportRequest;
 import com.kidneystone.report.dto.ReportResponse;
+import com.kidneystone.report.client.DiagnosisServiceClient;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class ReportService {
+
+    private final DiagnosisServiceClient diagnosisServiceClient;
+
+    public List<Map<String, Object>> getReportMetadata(String authHeader) {
+        List<Map<String, Object>> completedDiagnoses = diagnosisServiceClient.getCompletedDiagnoses(authHeader);
+        return completedDiagnoses.stream()
+                .map(d -> {
+                        Map<String, Object> map = new java.util.HashMap<>();
+                        map.put("id", d.get("id"));
+                        map.put("patientId", d.get("patientId"));
+                        map.put("diagnosisId", d.get("id"));
+                        map.put("format", "PDF");
+                        map.put("status", "READY");
+                        map.put("generatedAt", d.getOrDefault("createdAt", LocalDateTime.now().toString()));
+                        return map;
+                })
+                .collect(Collectors.toList());
+    }
 
     public ReportResponse generateReport(ReportRequest request) {
         StringBuilder sb = new StringBuilder();

@@ -22,6 +22,14 @@ public class ReportController {
 
     private final ReportService reportService;
 
+    @GetMapping
+    @Operation(summary = "Get list of available reports based on completed diagnoses")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")
+    public ResponseEntity<?> getReports(
+            @RequestHeader(value = org.springframework.http.HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
+        return ResponseEntity.ok(reportService.getReportMetadata(authHeader));
+    }
+
     @PostMapping("/generate")
     @Operation(summary = "Generate a consolidated structured clinical report")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_DOCTOR')")

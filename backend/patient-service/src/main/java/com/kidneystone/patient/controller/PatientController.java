@@ -37,6 +37,7 @@ public class PatientController {
     public ResponseEntity<ApiResponse<PatientResponse>> create(
             @Valid @RequestBody CreatePatientRequest request,
             Principal principal) {
+        System.out.println("[DIAGNOSTIC] createPatient caller principal.getName = " + principal.getName());
         UUID registeredBy = UUID.fromString(principal.getName());
         PatientResponse response = patientService.createPatient(request, registeredBy);
         return ResponseEntity.status(HttpStatus.CREATED)
